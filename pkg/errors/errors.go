@@ -32,12 +32,6 @@ const (
 
 // 定義済みエラー
 var (
-	ErrInvalidToken = &APIError{
-		Code:    ErrCodeInvalidToken,
-		Message: "Invalid or malformed token",
-		Status:  http.StatusUnauthorized,
-	}
-
 	ErrExpiredToken = &APIError{
 		Code:    ErrCodeExpiredToken,
 		Message: "Token has expired",
@@ -55,16 +49,66 @@ var (
 		Message: "User not found",
 		Status:  http.StatusNotFound,
 	}
+
+	ErrUnauthorized = &APIError{
+		Code:    ErrCodeAuthentication,
+		Message: "Unauthorized access",
+		Status:  http.StatusUnauthorized,
+	}
+
+	ErrInvalidCredentials = &APIError{
+		Code:    ErrCodeAuthentication,
+		Message: "Invalid credentials",
+		Status:  http.StatusUnauthorized,
+	}
+
+	ErrInvalidToken = &APIError{
+		Code:    ErrCodeAuthentication,
+		Message: "Invalid token",
+		Status:  http.StatusUnauthorized,
+	}
+
+	ErrTokenExpired = &APIError{
+		Code:    ErrCodeAuthentication,
+		Message: "Token expired",
+		Status:  http.StatusUnauthorized,
+	}
+
+	ErrTokenRevoked = &APIError{
+		Code:    ErrCodeAuthentication,
+		Message: "Token revoked",
+		Status:  http.StatusUnauthorized,
+	}
+
+	ErrUserInactive = &APIError{
+		Code:    ErrCodeAuthentication,
+		Message: "User account is not active",
+		Status:  http.StatusUnauthorized,
+	}
 )
 
-// NewValidationError 新しいバリデーションエラーを作成
-func NewValidationError(field, message string) *APIError {
-	return &APIError{
+// NewValidationError 新しいバリデーションエラーを作成（オーバーロード対応）
+func NewValidationError(args ...interface{}) *APIError {
+	apiErr := &APIError{
 		Code:    ErrCodeValidation,
 		Message: "Validation failed",
-		Details: fmt.Sprintf("Field '%s': %s", field, message),
 		Status:  http.StatusBadRequest,
 	}
+	
+	switch len(args) {
+	case 1:
+		if err, ok := args[0].(error); ok {
+			apiErr.Details = err.Error()
+		} else if str, ok := args[0].(string); ok {
+			apiErr.Details = str
+		}
+	case 2:
+		field := fmt.Sprintf("%v", args[0])
+		message := fmt.Sprintf("%v", args[1])
+		apiErr.Details = fmt.Sprintf("Field '%s': %s", field, message)
+	}
+	
+	return apiErr
 }
 
 // NewAuthenticationError 新しい認証エラーを作成
@@ -99,6 +143,36 @@ func NewDatabaseError(err error) *APIError {
 
 // NewInternalError 新しい内部サーバーエラーを作成
 func NewInternalError(message string) *APIError {
+	return &APIError{
+		Code:    ErrCodeInternal,
+		Message: "Internal server error",
+		Details: message,
+		Status:  http.StatusInternalServerError,
+	}
+}
+
+// NewNotFoundError 新しい404エラーを作成
+func NewNotFoundError(message string) *APIError {
+	return &APIError{
+		Code:    ErrCodeNotFound,
+		Message: "Resource not found",
+		Details: message,
+		Status:  http.StatusNotFound,
+	}
+}
+
+// NewUnauthorizedError 新しい401エラーを作成
+func NewUnauthorizedError(message string) *APIError {
+	return &APIError{
+		Code:    ErrCodeAuthentication,
+		Message: "Unauthorized",
+		Details: message,
+		Status:  http.StatusUnauthorized,
+	}
+}
+
+// NewInternalServerError 新しい500エラーを作成
+func NewInternalServerError(message string) *APIError {
 	return &APIError{
 		Code:    ErrCodeInternal,
 		Message: "Internal server error",

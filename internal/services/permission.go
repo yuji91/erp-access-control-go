@@ -31,6 +31,9 @@ const (
 	ModulePermission Module = "permission"
 	ModuleAudit      Module = "audit"
 	ModuleSystem     Module = "system"
+	ModuleInventory  Module = "inventory"
+	ModuleOrders     Module = "orders"
+	ModuleReports    Module = "reports"
 )
 
 // Action 実行可能なアクションを表す
@@ -43,6 +46,10 @@ const (
 	ActionDelete Action = "delete"
 	ActionList   Action = "list"
 	ActionManage Action = "manage"
+	ActionView   Action = "view"
+	ActionApprove Action = "approve"
+	ActionExport Action = "export"
+	ActionAdmin  Action = "admin"
 )
 
 // Permission 権限文字列を表す
@@ -61,13 +68,13 @@ func NewPermission(module Module, action Action) Permission {
 // - 地理的制限 (特定IPレンジ、地域からのみアクセス)
 // - 継承ベース階層権限 (部門長→課長→係長の自動継承)
 var PermissionMatrix = map[string][]Permission{
-	// Super Admin - Full access
-	"super_admin": {
+	// システム管理者 - Full access
+	"システム管理者": {
 		"*:*", // Wildcard permission for everything
 	},
 
-	// Admin - Most permissions except system management
-	"admin": {
+	// 部門管理者 - Most permissions except system management
+	"部門管理者": {
 		NewPermission(ModuleUser, ActionCreate),
 		NewPermission(ModuleUser, ActionRead),
 		NewPermission(ModuleUser, ActionUpdate),
@@ -89,8 +96,37 @@ var PermissionMatrix = map[string][]Permission{
 		NewPermission(ModuleAudit, ActionList),
 	},
 
-	// Manager - Department and user management within scope
-	"manager": {
+	// 開発者 - Development related permissions
+	"開発者": {
+		NewPermission(ModuleUser, ActionRead),
+		NewPermission(ModuleUser, ActionUpdate),
+		NewPermission(ModuleUser, ActionList),
+		NewPermission(ModuleDepartment, ActionRead),
+		NewPermission(ModuleDepartment, ActionList),
+		NewPermission(ModuleRole, ActionRead),
+		NewPermission(ModuleRole, ActionList),
+		NewPermission(ModuleAudit, ActionRead),
+	},
+
+	// 一般ユーザー - Basic read access
+	"一般ユーザー": {
+		NewPermission(ModuleUser, ActionRead),
+		NewPermission(ModuleDepartment, ActionRead),
+		NewPermission(ModuleRole, ActionRead),
+	},
+
+	// ゲストユーザー - Read-only access
+	"ゲストユーザー": {
+		NewPermission(ModuleUser, ActionRead),
+		NewPermission(ModuleUser, ActionList),
+		NewPermission(ModuleDepartment, ActionRead),
+		NewPermission(ModuleDepartment, ActionList),
+		NewPermission(ModuleRole, ActionRead),
+		NewPermission(ModuleRole, ActionList),
+	},
+
+	// プロジェクトマネージャー - Project management permissions
+	"プロジェクトマネージャー": {
 		NewPermission(ModuleUser, ActionRead),
 		NewPermission(ModuleUser, ActionUpdate),
 		NewPermission(ModuleUser, ActionList),
@@ -98,29 +134,24 @@ var PermissionMatrix = map[string][]Permission{
 		NewPermission(ModuleDepartment, ActionUpdate),
 		NewPermission(ModuleDepartment, ActionList),
 		NewPermission(ModuleRole, ActionRead),
+		NewPermission(ModuleRole, ActionUpdate),
 		NewPermission(ModuleRole, ActionList),
 		NewPermission(ModuleAudit, ActionRead),
 	},
 
-	// Employee - Basic read access
-	"employee": {
-		NewPermission(ModuleUser, ActionRead),
-		NewPermission(ModuleDepartment, ActionRead),
-		NewPermission(ModuleRole, ActionRead),
-	},
-
-	// Viewer - Read-only access
-	"viewer": {
+	// テスター - Testing related permissions
+	"テスター": {
 		NewPermission(ModuleUser, ActionRead),
 		NewPermission(ModuleUser, ActionList),
 		NewPermission(ModuleDepartment, ActionRead),
 		NewPermission(ModuleDepartment, ActionList),
 		NewPermission(ModuleRole, ActionRead),
 		NewPermission(ModuleRole, ActionList),
+		NewPermission(ModuleAudit, ActionRead),
 	},
 }
 
-// GetUserPermissions ユーザーの全権限を取得
+// GetUserPermissions ユーザーの全権限を取得（複数ロール対応）
 func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, error) {
 	// TODO: パフォーマンス最適化
 	// - Redis/Memcachedによる権限キャッシュ (TTL: 5-15分)
@@ -128,23 +159,52 @@ func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, erro
 	// - バッチ権限取得機能 (複数ユーザー一括処理)
 	// - 権限変更時のキャッシュ無効化戦略
 
+	fmt.Printf("DEBUG: GetUserPermissions called for user ID: %s\n", userID)
+
 	var user models.User
-	if err := s.db.Preload("Role.Permissions").First(&user, userID).Error; err != nil {
+	if err := s.db.Preload("UserRoles.Role.Permissions").Preload("PrimaryRole.Permissions").First(&user, userID).Error; err != nil {
+		fmt.Printf("DEBUG: Error loading user: %v\n", err)
 		return nil, err
 	}
 
+	fmt.Printf("DEBUG: User loaded successfully - UserRoles count: %d\n", len(user.UserRoles))
+
 	permissionSet := make(map[string]bool)
 
-	// Get base permissions from matrix for user's role
-	if basePerms, exists := PermissionMatrix[user.Role.Name]; exists {
-		for _, perm := range basePerms {
-			permissionSet[string(perm)] = true
+	// 複数ロールから権限を集約
+	for i, userRole := range user.UserRoles {
+		fmt.Printf("DEBUG: Processing UserRole[%d] - Role: %s, IsValidNow: %t\n", i, userRole.Role.Name, userRole.IsValidNow())
+		
+		// アクティブで有効期間内のロールのみ処理
+		if !userRole.IsValidNow() {
+			fmt.Printf("DEBUG: Skipping invalid UserRole[%d]\n", i)
+			continue
+		}
+
+		// Get base permissions from matrix for each role
+		if basePerms, exists := PermissionMatrix[userRole.Role.Name]; exists {
+			fmt.Printf("DEBUG: Found permissions in matrix for role '%s': %d permissions\n", userRole.Role.Name, len(basePerms))
+			for _, perm := range basePerms {
+				permissionSet[string(perm)] = true
+			}
+		} else {
+			fmt.Printf("DEBUG: No permissions found in matrix for role '%s'\n", userRole.Role.Name)
+		}
+
+		// Add explicit permissions from database for each role
+		fmt.Printf("DEBUG: Database permissions for role '%s': %d permissions\n", userRole.Role.Name, len(userRole.Role.Permissions))
+		for _, perm := range userRole.Role.Permissions {
+			permissionSet[perm.GetUniqueKey()] = true
 		}
 	}
 
-	// Add explicit permissions from database for the role
-	for _, perm := range user.Role.Permissions {
-		permissionSet[perm.GetUniqueKey()] = true
+	// 後方互換性: PrimaryRoleが設定されている場合は優先
+	if user.PrimaryRole != nil {
+		if basePerms, exists := PermissionMatrix[user.PrimaryRole.Name]; exists {
+			for _, perm := range basePerms {
+				permissionSet[string(perm)] = true
+			}
+		}
 	}
 
 	// Convert to slice
@@ -156,7 +216,40 @@ func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, erro
 	return permissions, nil
 }
 
-// CheckPermission ユーザーが特定の権限を持っているかチェック
+// GetUserRoleHierarchyPermissions 階層ロール権限を含めて取得
+func (s *PermissionService) GetUserRoleHierarchyPermissions(userID uuid.UUID) ([]string, error) {
+	var permissions []string
+	
+	query := `
+		WITH RECURSIVE role_hierarchy AS (
+			-- アクティブなユーザーロール
+			SELECT ur.role_id, ur.priority
+			FROM user_roles ur
+			WHERE ur.user_id = ? 
+				AND ur.is_active = true
+				AND ur.valid_from <= NOW()
+				AND (ur.valid_to IS NULL OR ur.valid_to > NOW())
+			
+			UNION
+			
+			-- 親ロールを辿る
+			SELECT r.parent_id, rh.priority
+			FROM roles r
+			JOIN role_hierarchy rh ON r.id = rh.role_id
+			WHERE r.parent_id IS NOT NULL
+		)
+		SELECT DISTINCT CONCAT(p.module, ':', p.action) as permission
+		FROM permissions p
+		JOIN role_permissions rp ON p.id = rp.permission_id
+		JOIN role_hierarchy rh ON rp.role_id = rh.role_id
+		ORDER BY permission
+	`
+	
+	err := s.db.Raw(query, userID).Pluck("permission", &permissions).Error
+	return permissions, err
+}
+
+// CheckPermission ユーザーが特定の権限を持っているかチェック（複数ロール対応）
 func (s *PermissionService) CheckPermission(userID uuid.UUID, requiredPermission string) (bool, error) {
 	// TODO: 監査ログ強化
 	// - 権限チェックの詳細ログ (成功/失敗、リソース、時刻)
