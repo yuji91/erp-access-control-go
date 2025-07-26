@@ -37,6 +37,10 @@ type JWTConfig struct {
 	Secret    string        `mapstructure:"secret"`
 	ExpiresIn time.Duration `mapstructure:"expires_in"`
 	Issuer    string        `mapstructure:"issuer"`
+	// TODO: セキュリティ強化
+	// - RSA公開鍵/秘密鍵方式への移行検討
+	// - アクセストークン(短期) + リフレッシュトークン(長期)分離
+	// - JWTアルゴリズムの明示的指定 (RS256推奨)
 }
 
 // LoggerConfig holds logger configuration
@@ -93,8 +97,9 @@ func setDefaults() {
 	viper.SetDefault("database.ssl_mode", "disable")
 
 	// JWT defaults
+	// TODO: セキュリティ改善 - 本番環境では必ず環境変数から読み込む
 	viper.SetDefault("jwt.secret", "your-super-secret-jwt-key-256-bits-long")
-	viper.SetDefault("jwt.expires_in", "24h")
+	viper.SetDefault("jwt.expires_in", "24h") // TODO: 短縮検討 (15分推奨)
 	viper.SetDefault("jwt.issuer", "erp-access-control-api")
 
 	// Logger defaults

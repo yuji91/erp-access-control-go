@@ -54,6 +54,12 @@ func NewPermission(module Module, action Action) Permission {
 }
 
 // PermissionMatrix defines the permission matrix for the system
+// TODO: アーキテクチャ改善
+// - データベースベース権限管理への移行検討
+// - 動的権限追加・削除機能
+// - 時間ベース権限 (営業時間のみ有効など)
+// - 地理的制限 (特定IPレンジ、地域からのみアクセス)
+// - 継承ベース階層権限 (部門長→課長→係長の自動継承)
 var PermissionMatrix = map[string][]Permission{
 	// Super Admin - Full access
 	"super_admin": {
@@ -116,6 +122,12 @@ var PermissionMatrix = map[string][]Permission{
 
 // GetUserPermissions retrieves all permissions for a user
 func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, error) {
+	// TODO: パフォーマンス最適化
+	// - Redis/Memcachedによる権限キャッシュ (TTL: 5-15分)
+	// - 階層的権限の事前計算とキャッシュ
+	// - バッチ権限取得機能 (複数ユーザー一括処理)
+	// - 権限変更時のキャッシュ無効化戦略
+
 	var user models.User
 	if err := s.db.Preload("Role.Permissions").First(&user, userID).Error; err != nil {
 		return nil, err
@@ -146,12 +158,23 @@ func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, erro
 
 // CheckPermission checks if user has a specific permission
 func (s *PermissionService) CheckPermission(userID uuid.UUID, requiredPermission string) (bool, error) {
+	// TODO: 監査ログ強化
+	// - 権限チェックの詳細ログ (成功/失敗、リソース、時刻)
+	// - セキュリティアラート (権限昇格試行、異常パターン)
+	// - パフォーマンスメトリクス (応答時間、呼び出し頻度)
+	
 	permissions, err := s.GetUserPermissions(userID)
 	if err != nil {
 		return false, err
 	}
 
-	return s.hasPermission(permissions, requiredPermission), nil
+	hasPermission := s.hasPermission(permissions, requiredPermission)
+	
+	// TODO: ログ出力実装
+	// log.Info("Permission check", zap.String("user_id", userID.String()), 
+	//     zap.String("permission", requiredPermission), zap.Bool("granted", hasPermission))
+
+	return hasPermission, nil
 }
 
 // CheckPermissionWithScope checks permission with scope conditions

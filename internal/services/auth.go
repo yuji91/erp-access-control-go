@@ -72,11 +72,18 @@ type DeptInfo struct {
 
 // Login authenticates a user and returns JWT token
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
+	// TODO: セキュリティ強化
+	// - レート制限 (IP/ユーザー別ログイン試行回数制限)
+	// - ブルートフォース攻撃対策 (アカウントロックアウト)
+	// - ログイン履歴記録 (IP、User-Agent、成功/失敗)
+	// - MFA (多要素認証) 対応
+
 	// Find user by email
 	var user models.User
 	if err := s.db.Preload("Role").Preload("Department").
 		Where("email = ?", req.Email).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
+			// TODO: タイミング攻撃対策 - 常に一定時間でレスポンス
 			return nil, errors.NewAuthenticationError("invalid email or password")
 		}
 		return nil, errors.NewDatabaseError(err)
@@ -206,6 +213,13 @@ func (s *AuthService) RefreshToken(currentToken string) (*LoginResponse, error) 
 
 // ChangePassword changes user password
 func (s *AuthService) ChangePassword(userID uuid.UUID, currentPassword, newPassword string) error {
+	// TODO: パスワードポリシー強化
+	// - 最小長度 (8文字以上)
+	// - 複雑性要件 (大文字、小文字、数字、特殊文字)
+	// - 過去のパスワード履歴チェック (直近N回と重複禁止)
+	// - 辞書攻撃対策 (一般的なパスワードの禁止)
+	// - パスワード強度スコア計算
+
 	// Get user
 	var user models.User
 	if err := s.db.First(&user, userID).Error; err != nil {
@@ -217,7 +231,13 @@ func (s *AuthService) ChangePassword(userID uuid.UUID, currentPassword, newPassw
 		return errors.NewAuthenticationError("current password is incorrect")
 	}
 
+	// TODO: パスワード強度バリデーション実装
+	// if !isStrongPassword(newPassword) {
+	//     return errors.NewValidationError("password", "password does not meet security requirements")
+	// }
+
 	// Hash new password
+	// TODO: bcrypt cost調整 (現在は10、本番では12-14推奨)
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return errors.NewInternalError("failed to hash password")

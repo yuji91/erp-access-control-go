@@ -84,6 +84,12 @@ func (s *TokenRevocationService) IsUserTokensRevoked(userID uuid.UUID, issuedAt 
 
 // CleanupExpiredTokens removes expired revoked tokens from the database
 func (s *TokenRevocationService) CleanupExpiredTokens(olderThan time.Duration) error {
+	// TODO: パフォーマンス最適化
+	// - バッチ削除処理 (一度に大量削除ではなく分割実行)
+	// - インデックス最適化 (revoked_at、expires_atの複合インデックス)
+	// - 統計情報収集 (削除件数、実行時間)
+	// - 自動スケジューリング (cron job、定期実行)
+	
 	cutoffTime := time.Now().Add(-olderThan)
 
 	if err := s.db.Where("revoked_at < ?", cutoffTime).Delete(&models.RevokedToken{}).Error; err != nil {

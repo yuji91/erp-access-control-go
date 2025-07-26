@@ -14,8 +14,14 @@ type User struct {
 	Email        string     `gorm:"uniqueIndex;not null" json:"email"`
 	PasswordHash string     `gorm:"not null" json:"-"` // パスワードハッシュ（JSONレスポンスから除外）
 	DepartmentID uuid.UUID  `gorm:"type:uuid;not null;index" json:"department_id"`
-	RoleID       uuid.UUID  `gorm:"type:uuid;not null;index" json:"role_id"`
+	RoleID       uuid.UUID  `gorm:"type:uuid;not null;index" json:"role_id"` // TODO: 多対多関係への拡張検討
 	Status       UserStatus `gorm:"not null;default:'active';check:status IN ('active','inactive','suspended')" json:"status"`
+
+	// TODO: アーキテクチャ改善
+	// - 複数ロール対応: UserRole中間テーブルの導入
+	// - パスワード強度追跡: PasswordSetAt, LastPasswordChange
+	// - ログイン履歴: LastLoginAt, LoginAttempts, LockoutUntil
+	// - プロファイル拡張: FirstName, LastName, PhoneNumber, Timezone
 
 	// リレーション
 	Department       Department        `gorm:"foreignKey:DepartmentID;constraint:OnDelete:CASCADE" json:"department,omitempty"`

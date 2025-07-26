@@ -29,8 +29,15 @@ func NewAuthMiddleware(jwtService *jwt.Service, revocationService *services.Toke
 // Authentication verifies JWT token and sets user context
 func (m *AuthMiddleware) Authentication() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// TODO: セキュリティ強化
+		// - リクエストレート制限 (IP/ユーザー別)
+		// - 異常検知 (同一トークンの大量リクエスト)
+		// - トークン使用状況の監視とアラート
+		// - CORS設定の厳格化
+
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			// TODO: 不正アクセス試行のログ記録
 			c.JSON(http.StatusUnauthorized, errors.ErrInvalidToken)
 			c.Abort()
 			return
