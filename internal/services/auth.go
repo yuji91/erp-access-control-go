@@ -1,8 +1,9 @@
 package services
 
 import (
-	"crypto/bcrypt"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -51,20 +52,29 @@ type LoginResponse struct {
 
 // UserInfo represents user information in responses
 type UserInfo struct {
-	ID          uuid.UUID `json:"id"`
-	Email       string    `json:"email"`
-	FirstName   string    `json:"first_name"`
-	LastName    string    `json:"last_name"`
-	Status      string    `json:"status"`
-	Roles       []string  `json:"roles"`
-	Departments []string  `json:"departments"`
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	Email      string    `json:"email"`
+	Status     string    `json:"status"`
+	Role       RoleInfo  `json:"role"`
+	Department DeptInfo  `json:"department"`
+}
+
+type RoleInfo struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+type DeptInfo struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }
 
 // Login authenticates a user and returns JWT token
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	// Find user by email
 	var user models.User
-	if err := s.db.Preload("Roles").Preload("Departments").
+	if err := s.db.Preload("Role").Preload("Department").
 		Where("email = ?", req.Email).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.NewAuthenticationError("invalid email or password")
@@ -96,21 +106,18 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 
 	// Prepare response
 	userInfo := UserInfo{
-		ID:        user.ID,
-		Email:     user.Email,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		Status:    string(user.Status),
-		Roles:     make([]string, len(user.Roles)),
-		Departments: make([]string, len(user.Departments)),
-	}
-
-	for i, role := range user.Roles {
-		userInfo.Roles[i] = role.Name
-	}
-
-	for i, dept := range user.Departments {
-		userInfo.Departments[i] = dept.Name
+		ID:     user.ID,
+		Name:   user.Name,
+		Email:  user.Email,
+		Status: string(user.Status),
+		Role: RoleInfo{
+			ID:   user.Role.ID,
+			Name: user.Role.Name,
+		},
+		Department: DeptInfo{
+			ID:   user.Department.ID,
+			Name: user.Department.Name,
+		},
 	}
 
 	return &LoginResponse{
@@ -146,7 +153,7 @@ func (s *AuthService) RefreshToken(currentToken string) (*LoginResponse, error) 
 
 	// Get updated user info and permissions
 	var user models.User
-	if err := s.db.Preload("Roles").Preload("Departments").
+	if err := s.db.Preload("Role").Preload("Department").
 		First(&user, claims.UserID).Error; err != nil {
 		return nil, errors.NewDatabaseError(err)
 	}
@@ -175,21 +182,18 @@ func (s *AuthService) RefreshToken(currentToken string) (*LoginResponse, error) 
 
 	// Prepare response
 	userInfo := UserInfo{
-		ID:          user.ID,
-		Email:       user.Email,
-		FirstName:   user.FirstName,
-		LastName:    user.LastName,
-		Status:      string(user.Status),
-		Roles:       make([]string, len(user.Roles)),
-		Departments: make([]string, len(user.Departments)),
-	}
-
-	for i, role := range user.Roles {
-		userInfo.Roles[i] = role.Name
-	}
-
-	for i, dept := range user.Departments {
-		userInfo.Departments[i] = dept.Name
+		ID:     user.ID,
+		Name:   user.Name,
+		Email:  user.Email,
+		Status: string(user.Status),
+		Role: RoleInfo{
+			ID:   user.Role.ID,
+			Name: user.Role.Name,
+		},
+		Department: DeptInfo{
+			ID:   user.Department.ID,
+			Name: user.Department.Name,
+		},
 	}
 
 	return &LoginResponse{
@@ -241,28 +245,25 @@ func (s *AuthService) ValidatePermissionWithScope(userID uuid.UUID, permission s
 // GetUserProfile returns user profile information
 func (s *AuthService) GetUserProfile(userID uuid.UUID) (*UserInfo, error) {
 	var user models.User
-	if err := s.db.Preload("Roles").Preload("Departments").
+	if err := s.db.Preload("Role").Preload("Department").
 		First(&user, userID).Error; err != nil {
 		return nil, errors.NewDatabaseError(err)
 	}
 
 	userInfo := &UserInfo{
-		ID:          user.ID,
-		Email:       user.Email,
-		FirstName:   user.FirstName,
-		LastName:    user.LastName,
-		Status:      string(user.Status),
-		Roles:       make([]string, len(user.Roles)),
-		Departments: make([]string, len(user.Departments)),
-	}
-
-	for i, role := range user.Roles {
-		userInfo.Roles[i] = role.Name
-	}
-
-	for i, dept := range user.Departments {
-		userInfo.Departments[i] = dept.Name
+		ID:     user.ID,
+		Name:   user.Name,
+		Email:  user.Email,
+		Status: string(user.Status),
+		Role: RoleInfo{
+			ID:   user.Role.ID,
+			Name: user.Role.Name,
+		},
+		Department: DeptInfo{
+			ID:   user.Department.ID,
+			Name: user.Department.Name,
+		},
 	}
 
 	return userInfo, nil
-} 
+}

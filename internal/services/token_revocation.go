@@ -23,10 +23,10 @@ func NewTokenRevocationService(db *gorm.DB) *TokenRevocationService {
 // RevokeToken revokes a JWT token by storing its JTI in the revoked_tokens table
 func (s *TokenRevocationService) RevokeToken(jti string, userID uuid.UUID, reason string) error {
 	revokedToken := models.RevokedToken{
-		JTI:       jti,
+		TokenJTI:  jti,
 		UserID:    userID,
 		RevokedAt: time.Now(),
-		Reason:    reason,
+		ExpiresAt: time.Now().Add(24 * time.Hour), // JWT expiration time
 	}
 
 	if err := s.db.Create(&revokedToken).Error; err != nil {
@@ -39,7 +39,7 @@ func (s *TokenRevocationService) RevokeToken(jti string, userID uuid.UUID, reaso
 // IsTokenRevoked checks if a token (by JTI) has been revoked
 func (s *TokenRevocationService) IsTokenRevoked(jti string) (bool, error) {
 	var count int64
-	if err := s.db.Model(&models.RevokedToken{}).Where("jti = ?", jti).Count(&count).Error; err != nil {
+	if err := s.db.Model(&models.RevokedToken{}).Where("token_jti = ?", jti).Count(&count).Error; err != nil {
 		return false, errors.NewDatabaseError(err)
 	}
 
@@ -51,12 +51,12 @@ func (s *TokenRevocationService) RevokeAllUserTokens(userID uuid.UUID, reason st
 	// Get all active sessions/tokens for the user
 	// Since we can't get all JTIs from active tokens, we'll use a different approach
 	// We'll store a "revoke_all_before" timestamp for the user
-	
+
 	revokedToken := models.RevokedToken{
-		JTI:       "*", // Special marker for "revoke all"
+		TokenJTI:  "*", // Special marker for "revoke all"
 		UserID:    userID,
 		RevokedAt: time.Now(),
-		Reason:    reason,
+		ExpiresAt: time.Now().Add(24 * time.Hour), // JWT expiration time
 	}
 
 	if err := s.db.Create(&revokedToken).Error; err != nil {
@@ -69,7 +69,7 @@ func (s *TokenRevocationService) RevokeAllUserTokens(userID uuid.UUID, reason st
 // IsUserTokensRevoked checks if all tokens for a user were revoked after a certain time
 func (s *TokenRevocationService) IsUserTokensRevoked(userID uuid.UUID, issuedAt time.Time) (bool, error) {
 	var revokedToken models.RevokedToken
-	err := s.db.Where("user_id = ? AND jti = ? AND revoked_at > ?", userID, "*", issuedAt).
+	err := s.db.Where("user_id = ? AND token_jti = ? AND revoked_at > ?", userID, "*", issuedAt).
 		First(&revokedToken).Error
 
 	if err != nil {
@@ -85,7 +85,7 @@ func (s *TokenRevocationService) IsUserTokensRevoked(userID uuid.UUID, issuedAt 
 // CleanupExpiredTokens removes expired revoked tokens from the database
 func (s *TokenRevocationService) CleanupExpiredTokens(olderThan time.Duration) error {
 	cutoffTime := time.Now().Add(-olderThan)
-	
+
 	if err := s.db.Where("revoked_at < ?", cutoffTime).Delete(&models.RevokedToken{}).Error; err != nil {
 		return errors.NewDatabaseError(err)
 	}
@@ -160,4 +160,4 @@ func (s *TokenRevocationService) ValidateTokenStatus(jti string, userID uuid.UUI
 	}
 
 	return nil
-} 
+}

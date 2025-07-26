@@ -88,4 +88,4 @@ func (s *Service) RefreshToken(tokenString string) (string, error) {
 
 	// Generate new token with same user data but new expiration
 	return s.GenerateToken(claims.UserID, claims.Email, claims.Permissions)
-} 
+}

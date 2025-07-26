@@ -26,7 +26,7 @@ type Module string
 
 const (
 	ModuleUser       Module = "user"
-	ModuleDepartment Module = "department" 
+	ModuleDepartment Module = "department"
 	ModuleRole       Module = "role"
 	ModulePermission Module = "permission"
 	ModuleAudit      Module = "audit"
@@ -117,25 +117,22 @@ var PermissionMatrix = map[string][]Permission{
 // GetUserPermissions retrieves all permissions for a user
 func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, error) {
 	var user models.User
-	if err := s.db.Preload("Roles.Permissions").First(&user, userID).Error; err != nil {
+	if err := s.db.Preload("Role.Permissions").First(&user, userID).Error; err != nil {
 		return nil, err
 	}
 
 	permissionSet := make(map[string]bool)
-	
-	// Collect permissions from all roles
-	for _, role := range user.Roles {
-		// Get base permissions from matrix
-		if basePerms, exists := PermissionMatrix[role.Name]; exists {
-			for _, perm := range basePerms {
-				permissionSet[string(perm)] = true
-			}
+
+	// Get base permissions from matrix for user's role
+	if basePerms, exists := PermissionMatrix[user.Role.Name]; exists {
+		for _, perm := range basePerms {
+			permissionSet[string(perm)] = true
 		}
-		
-		// Add explicit permissions from database
-		for _, perm := range role.Permissions {
-			permissionSet[perm.Permission] = true
-		}
+	}
+
+	// Add explicit permissions from database for the role
+	for _, perm := range user.Role.Permissions {
+		permissionSet[perm.GetUniqueKey()] = true
 	}
 
 	// Convert to slice
@@ -181,7 +178,12 @@ func (s *PermissionService) CheckPermissionWithScope(userID uuid.UUID, requiredP
 
 	// Check if any scope matches
 	for _, scope := range userScopes {
-		if s.evaluateScope(scope.ScopeConditions, resourceScope) {
+		// Convert JSONB to json.RawMessage
+		scopeJSON, err := json.Marshal(scope.ScopeValue)
+		if err != nil {
+			continue
+		}
+		if s.evaluateScope(json.RawMessage(scopeJSON), resourceScope) {
 			return true, nil
 		}
 	}
@@ -190,9 +192,9 @@ func (s *PermissionService) CheckPermissionWithScope(userID uuid.UUID, requiredP
 }
 
 // evaluateScope evaluates JSONB scope conditions against resource scope
-func (s *PermissionService) evaluateScope(scopeConditions json.RawMessage, resourceScope map[string]interface{}) bool {
+func (s *PermissionService) evaluateScope(scopeValue json.RawMessage, resourceScope map[string]interface{}) bool {
 	var conditions map[string]interface{}
-	if err := json.Unmarshal(scopeConditions, &conditions); err != nil {
+	if err := json.Unmarshal(scopeValue, &conditions); err != nil {
 		return false
 	}
 
@@ -270,13 +272,13 @@ func (s *PermissionService) matchesWildcard(pattern, permission string) bool {
 		module := strings.TrimSuffix(pattern, ":*")
 		return strings.HasPrefix(permission, module+":")
 	}
-	
+
 	// Handle *:action patterns (e.g., "*:read" matches "user:read")
 	if strings.HasPrefix(pattern, "*:") {
 		action := strings.TrimPrefix(pattern, "*:")
 		return strings.HasSuffix(permission, ":"+action)
 	}
-	
+
 	return false
 }
 
@@ -293,12 +295,12 @@ func (s *PermissionService) ValidatePermission(permission string) bool {
 	if permission == "*" || permission == "*:*" {
 		return true
 	}
-	
+
 	parts := strings.Split(permission, ":")
 	if len(parts) != 2 {
 		return false
 	}
-	
+
 	module, action := parts[0], parts[1]
 	return s.isValidModule(module) && s.isValidAction(action)
 }
@@ -316,7 +318,7 @@ func (s *PermissionService) isValidModule(module string) bool {
 		string(ModuleAudit),
 		string(ModuleSystem),
 	}
-	
+
 	for _, valid := range validModules {
 		if module == valid {
 			return true
@@ -338,11 +340,11 @@ func (s *PermissionService) isValidAction(action string) bool {
 		string(ActionList),
 		string(ActionManage),
 	}
-	
+
 	for _, valid := range validActions {
 		if action == valid {
 			return true
 		}
 	}
 	return false
-} 
+}

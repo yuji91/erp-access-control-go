@@ -142,4 +142,4 @@ func (c *Config) GetDatabaseURL() string {
 // GetServerAddress returns the server address
 func (c *Config) GetServerAddress() string {
 	return c.Server.Host + ":" + c.Server.Port
-} 
+}

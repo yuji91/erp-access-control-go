@@ -19,14 +19,14 @@ func (e *APIError) Error() string {
 
 // Common error codes
 const (
-	ErrCodeValidation      = "VALIDATION_ERROR"
-	ErrCodeAuthentication  = "AUTHENTICATION_ERROR"
-	ErrCodeAuthorization   = "AUTHORIZATION_ERROR"
-	ErrCodeNotFound        = "NOT_FOUND"
-	ErrCodeDatabase        = "DATABASE_ERROR"
-	ErrCodeInternal        = "INTERNAL_ERROR"
-	ErrCodeInvalidToken    = "INVALID_TOKEN"
-	ErrCodeExpiredToken    = "EXPIRED_TOKEN"
+	ErrCodeValidation       = "VALIDATION_ERROR"
+	ErrCodeAuthentication   = "AUTHENTICATION_ERROR"
+	ErrCodeAuthorization    = "AUTHORIZATION_ERROR"
+	ErrCodeNotFound         = "NOT_FOUND"
+	ErrCodeDatabase         = "DATABASE_ERROR"
+	ErrCodeInternal         = "INTERNAL_ERROR"
+	ErrCodeInvalidToken     = "INVALID_TOKEN"
+	ErrCodeExpiredToken     = "EXPIRED_TOKEN"
 	ErrCodePermissionDenied = "PERMISSION_DENIED"
 )
 
@@ -105,4 +105,4 @@ func NewInternalError(message string) *APIError {
 		Details: message,
 		Status:  http.StatusInternalServerError,
 	}
-} 
+}

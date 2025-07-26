@@ -12,6 +12,7 @@ type User struct {
 	BaseModelWithUpdate
 	Name         string     `gorm:"not null" json:"name"`
 	Email        string     `gorm:"uniqueIndex;not null" json:"email"`
+	PasswordHash string     `gorm:"not null" json:"-"` // パスワードハッシュ（JSONレスポンスから除外）
 	DepartmentID uuid.UUID  `gorm:"type:uuid;not null;index" json:"department_id"`
 	RoleID       uuid.UUID  `gorm:"type:uuid;not null;index" json:"role_id"`
 	Status       UserStatus `gorm:"not null;default:'active';check:status IN ('active','inactive','suspended')" json:"status"`

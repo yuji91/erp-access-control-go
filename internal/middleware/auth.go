@@ -14,8 +14,8 @@ import (
 
 // AuthMiddleware provides JWT authentication middleware
 type AuthMiddleware struct {
-	jwtService          *jwt.Service
-	revocationService   *services.TokenRevocationService
+	jwtService        *jwt.Service
+	revocationService *services.TokenRevocationService
 }
 
 // NewAuthMiddleware creates a new authentication middleware
@@ -221,4 +221,4 @@ func hasPermission(userPermissions []string, requiredPermission string) bool {
 		}
 	}
 	return false
-} 
+}
