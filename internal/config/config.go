@@ -34,9 +34,10 @@ type DatabaseConfig struct {
 
 // JWTConfig JWT認証設定
 type JWTConfig struct {
-	Secret    string        `mapstructure:"secret"`
-	ExpiresIn time.Duration `mapstructure:"expires_in"`
-	Issuer    string        `mapstructure:"issuer"`
+	Secret              string        `mapstructure:"secret"`
+	ExpiresIn           time.Duration `mapstructure:"expires_in"`
+	AccessTokenDuration time.Duration `mapstructure:"access_token_duration"`
+	Issuer              string        `mapstructure:"issuer"`
 	// TODO: セキュリティ強化
 	// - RSA公開鍵/秘密鍵方式への移行検討
 	// - アクセストークン(短期) + リフレッシュトークン(長期)分離
@@ -100,6 +101,7 @@ func setDefaults() {
 	// TODO: セキュリティ改善 - 本番環境では必ず環境変数から読み込む
 	viper.SetDefault("jwt.secret", "your-super-secret-jwt-key-256-bits-long")
 	viper.SetDefault("jwt.expires_in", "24h") // TODO: 短縮検討 (15分推奨)
+	viper.SetDefault("jwt.access_token_duration", "15m")
 	viper.SetDefault("jwt.issuer", "erp-access-control-api")
 
 	// Logger defaults
@@ -125,6 +127,7 @@ func bindEnvVariables() {
 	// JWT
 	viper.BindEnv("jwt.secret", "JWT_SECRET")
 	viper.BindEnv("jwt.expires_in", "JWT_EXPIRES_IN")
+	viper.BindEnv("jwt.access_token_duration", "JWT_ACCESS_TOKEN_DURATION")
 	viper.BindEnv("jwt.issuer", "JWT_ISSUER")
 
 	// Logger
@@ -141,6 +144,18 @@ func (c *Config) GetDatabaseURL() string {
 		c.Database.Password,
 		c.Database.Name,
 		c.Database.SSLMode,
+	)
+}
+
+// GetDSN データベースDSNを取得
+func (c *DatabaseConfig) GetDSN() string {
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		c.Host,
+		c.Port,
+		c.User,
+		c.Password,
+		c.Name,
+		c.SSLMode,
 	)
 }
 

@@ -64,11 +64,16 @@ func (m *AuthMiddleware) Authentication() gin.HandlerFunc {
 			return
 		}
 
-		// Store user information in context
+		// Store user information in context（複数ロール対応）
 		c.Set("user_id", claims.UserID)
 		c.Set("email", claims.Email)
 		c.Set("permissions", claims.Permissions)
 		c.Set("jti", claims.ID)
+		
+		// 複数ロール情報をコンテキストに保存
+		c.Set("primary_role_id", claims.PrimaryRoleID)
+		c.Set("active_roles", claims.ActiveRoles)
+		c.Set("highest_role", claims.HighestRole)
 
 		c.Next()
 	}
