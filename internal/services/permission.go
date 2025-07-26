@@ -1,0 +1,348 @@
+package services
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"erp-access-control-go/models"
+)
+
+// PermissionService handles permission evaluation and management
+type PermissionService struct {
+	db *gorm.DB
+}
+
+// NewPermissionService creates a new permission service
+func NewPermissionService(db *gorm.DB) *PermissionService {
+	return &PermissionService{db: db}
+}
+
+// Module represents system modules
+type Module string
+
+const (
+	ModuleUser       Module = "user"
+	ModuleDepartment Module = "department" 
+	ModuleRole       Module = "role"
+	ModulePermission Module = "permission"
+	ModuleAudit      Module = "audit"
+	ModuleSystem     Module = "system"
+)
+
+// Action represents possible actions
+type Action string
+
+const (
+	ActionCreate Action = "create"
+	ActionRead   Action = "read"
+	ActionUpdate Action = "update"
+	ActionDelete Action = "delete"
+	ActionList   Action = "list"
+	ActionManage Action = "manage"
+)
+
+// Permission represents a permission string
+type Permission string
+
+// Standard permission format: module:action (e.g., "user:create", "role:read")
+func NewPermission(module Module, action Action) Permission {
+	return Permission(fmt.Sprintf("%s:%s", module, action))
+}
+
+// PermissionMatrix defines the permission matrix for the system
+var PermissionMatrix = map[string][]Permission{
+	// Super Admin - Full access
+	"super_admin": {
+		"*:*", // Wildcard permission for everything
+	},
+
+	// Admin - Most permissions except system management
+	"admin": {
+		NewPermission(ModuleUser, ActionCreate),
+		NewPermission(ModuleUser, ActionRead),
+		NewPermission(ModuleUser, ActionUpdate),
+		NewPermission(ModuleUser, ActionDelete),
+		NewPermission(ModuleUser, ActionList),
+		NewPermission(ModuleDepartment, ActionCreate),
+		NewPermission(ModuleDepartment, ActionRead),
+		NewPermission(ModuleDepartment, ActionUpdate),
+		NewPermission(ModuleDepartment, ActionDelete),
+		NewPermission(ModuleDepartment, ActionList),
+		NewPermission(ModuleRole, ActionCreate),
+		NewPermission(ModuleRole, ActionRead),
+		NewPermission(ModuleRole, ActionUpdate),
+		NewPermission(ModuleRole, ActionDelete),
+		NewPermission(ModuleRole, ActionList),
+		NewPermission(ModulePermission, ActionRead),
+		NewPermission(ModulePermission, ActionList),
+		NewPermission(ModuleAudit, ActionRead),
+		NewPermission(ModuleAudit, ActionList),
+	},
+
+	// Manager - Department and user management within scope
+	"manager": {
+		NewPermission(ModuleUser, ActionRead),
+		NewPermission(ModuleUser, ActionUpdate),
+		NewPermission(ModuleUser, ActionList),
+		NewPermission(ModuleDepartment, ActionRead),
+		NewPermission(ModuleDepartment, ActionUpdate),
+		NewPermission(ModuleDepartment, ActionList),
+		NewPermission(ModuleRole, ActionRead),
+		NewPermission(ModuleRole, ActionList),
+		NewPermission(ModuleAudit, ActionRead),
+	},
+
+	// Employee - Basic read access
+	"employee": {
+		NewPermission(ModuleUser, ActionRead),
+		NewPermission(ModuleDepartment, ActionRead),
+		NewPermission(ModuleRole, ActionRead),
+	},
+
+	// Viewer - Read-only access
+	"viewer": {
+		NewPermission(ModuleUser, ActionRead),
+		NewPermission(ModuleUser, ActionList),
+		NewPermission(ModuleDepartment, ActionRead),
+		NewPermission(ModuleDepartment, ActionList),
+		NewPermission(ModuleRole, ActionRead),
+		NewPermission(ModuleRole, ActionList),
+	},
+}
+
+// GetUserPermissions retrieves all permissions for a user
+func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, error) {
+	var user models.User
+	if err := s.db.Preload("Roles.Permissions").First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+
+	permissionSet := make(map[string]bool)
+	
+	// Collect permissions from all roles
+	for _, role := range user.Roles {
+		// Get base permissions from matrix
+		if basePerms, exists := PermissionMatrix[role.Name]; exists {
+			for _, perm := range basePerms {
+				permissionSet[string(perm)] = true
+			}
+		}
+		
+		// Add explicit permissions from database
+		for _, perm := range role.Permissions {
+			permissionSet[perm.Permission] = true
+		}
+	}
+
+	// Convert to slice
+	permissions := make([]string, 0, len(permissionSet))
+	for perm := range permissionSet {
+		permissions = append(permissions, perm)
+	}
+
+	return permissions, nil
+}
+
+// CheckPermission checks if user has a specific permission
+func (s *PermissionService) CheckPermission(userID uuid.UUID, requiredPermission string) (bool, error) {
+	permissions, err := s.GetUserPermissions(userID)
+	if err != nil {
+		return false, err
+	}
+
+	return s.hasPermission(permissions, requiredPermission), nil
+}
+
+// CheckPermissionWithScope checks permission with scope conditions
+func (s *PermissionService) CheckPermissionWithScope(userID uuid.UUID, requiredPermission string, resourceScope map[string]interface{}) (bool, error) {
+	// First check basic permission
+	hasBasicPerm, err := s.CheckPermission(userID, requiredPermission)
+	if err != nil {
+		return false, err
+	}
+	if !hasBasicPerm {
+		return false, nil
+	}
+
+	// Check scope restrictions
+	var userScopes []models.UserScope
+	if err := s.db.Where("user_id = ?", userID).Find(&userScopes).Error; err != nil {
+		return false, err
+	}
+
+	// If no scopes defined, allow access
+	if len(userScopes) == 0 {
+		return true, nil
+	}
+
+	// Check if any scope matches
+	for _, scope := range userScopes {
+		if s.evaluateScope(scope.ScopeConditions, resourceScope) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// evaluateScope evaluates JSONB scope conditions against resource scope
+func (s *PermissionService) evaluateScope(scopeConditions json.RawMessage, resourceScope map[string]interface{}) bool {
+	var conditions map[string]interface{}
+	if err := json.Unmarshal(scopeConditions, &conditions); err != nil {
+		return false
+	}
+
+	for key, expectedValue := range conditions {
+		if actualValue, exists := resourceScope[key]; exists {
+			if !s.compareValues(expectedValue, actualValue) {
+				return false
+			}
+		} else {
+			// Required scope field missing
+			return false
+		}
+	}
+
+	return true
+}
+
+// compareValues compares scope values with support for arrays and wildcards
+func (s *PermissionService) compareValues(expected, actual interface{}) bool {
+	switch exp := expected.(type) {
+	case string:
+		if exp == "*" {
+			return true // Wildcard matches anything
+		}
+		if act, ok := actual.(string); ok {
+			return exp == act
+		}
+	case []interface{}:
+		// Check if actual value is in the expected array
+		for _, val := range exp {
+			if s.compareValues(val, actual) {
+				return true
+			}
+		}
+	case map[string]interface{}:
+		// Nested conditions
+		if actMap, ok := actual.(map[string]interface{}); ok {
+			for k, v := range exp {
+				if actVal, exists := actMap[k]; exists {
+					if !s.compareValues(v, actVal) {
+						return false
+					}
+				} else {
+					return false
+				}
+			}
+			return true
+		}
+	default:
+		return expected == actual
+	}
+	return false
+}
+
+// hasPermission checks if permission exists in user's permissions with wildcard support
+func (s *PermissionService) hasPermission(userPermissions []string, requiredPermission string) bool {
+	for _, perm := range userPermissions {
+		if perm == "*" || perm == "*:*" {
+			return true // Super admin wildcard
+		}
+		if perm == requiredPermission {
+			return true // Exact match
+		}
+		if s.matchesWildcard(perm, requiredPermission) {
+			return true // Wildcard pattern match
+		}
+	}
+	return false
+}
+
+// matchesWildcard checks if permission matches wildcard pattern
+func (s *PermissionService) matchesWildcard(pattern, permission string) bool {
+	// Handle module:* patterns (e.g., "user:*" matches "user:read")
+	if strings.HasSuffix(pattern, ":*") {
+		module := strings.TrimSuffix(pattern, ":*")
+		return strings.HasPrefix(permission, module+":")
+	}
+	
+	// Handle *:action patterns (e.g., "*:read" matches "user:read")
+	if strings.HasPrefix(pattern, "*:") {
+		action := strings.TrimPrefix(pattern, "*:")
+		return strings.HasSuffix(permission, ":"+action)
+	}
+	
+	return false
+}
+
+// GetRolePermissions returns permissions for a specific role
+func (s *PermissionService) GetRolePermissions(roleName string) []Permission {
+	if perms, exists := PermissionMatrix[roleName]; exists {
+		return perms
+	}
+	return []Permission{}
+}
+
+// ValidatePermission validates if a permission string is valid
+func (s *PermissionService) ValidatePermission(permission string) bool {
+	if permission == "*" || permission == "*:*" {
+		return true
+	}
+	
+	parts := strings.Split(permission, ":")
+	if len(parts) != 2 {
+		return false
+	}
+	
+	module, action := parts[0], parts[1]
+	return s.isValidModule(module) && s.isValidAction(action)
+}
+
+// isValidModule checks if module is valid
+func (s *PermissionService) isValidModule(module string) bool {
+	if module == "*" {
+		return true
+	}
+	validModules := []string{
+		string(ModuleUser),
+		string(ModuleDepartment),
+		string(ModuleRole),
+		string(ModulePermission),
+		string(ModuleAudit),
+		string(ModuleSystem),
+	}
+	
+	for _, valid := range validModules {
+		if module == valid {
+			return true
+		}
+	}
+	return false
+}
+
+// isValidAction checks if action is valid
+func (s *PermissionService) isValidAction(action string) bool {
+	if action == "*" {
+		return true
+	}
+	validActions := []string{
+		string(ActionCreate),
+		string(ActionRead),
+		string(ActionUpdate),
+		string(ActionDelete),
+		string(ActionList),
+		string(ActionManage),
+	}
+	
+	for _, valid := range validActions {
+		if action == valid {
+			return true
+		}
+	}
+	return false
+} 
