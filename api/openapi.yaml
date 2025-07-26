@@ -1,0 +1,2857 @@
+openapi: 3.0.3
+info:
+  title: ERP Access Control API - Complete (v3 - Review Improved)
+  version: 3.0.0
+  description: |
+    **Permission Matrix + Policy Object ハイブリッド構成**の完全なERPアクセス制御API
+    
+    ## v3.0.0 改善内容
+    - **required フィールドの完全化**: 全requestSchemaでrequired欄を明示
+    - **enum定義の追加**: resource_type, action, reason_codeの列挙
+    - **403レスポンスの統一**: 全エンドポイントでセキュリティポリシー統一
+    
+    ## 機能概要
+    - **JWT認証**: セキュアなトークンベース認証
+    - **Permission Matrix**: モジュール×アクション権限マトリックス
+    - **Policy Object**: 時間制限・スコープベース制御
+    - **階層管理**: 部署・ロール階層サポート
+    - **監査ログ**: 完全なアクセス履歴
+    - **多段階承認**: 複雑な承認フロー対応
+  contact:
+    name: ERP API Support
+    email: support@erp-system.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+  - url: https://staging-api.erp-system.com/api/v1
+    description: Staging server
+  - url: https://api.erp-system.com/api/v1
+    description: Production server
+
+paths:
+  # =============================================================================
+  # 認証・セキュリティ
+  # =============================================================================
+  /auth/login:
+    post:
+      summary: ユーザーログイン
+      operationId: login
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: ログイン成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/logout:
+    post:
+      summary: ユーザーログアウト（トークン無効化）
+      operationId: logout
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: ログアウト成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/refresh:
+    post:
+      summary: JWTトークンリフレッシュ
+      operationId: refreshToken
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: トークンリフレッシュ成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/revoke:
+    post:
+      summary: 指定トークンの無効化
+      operationId: revokeToken
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeTokenRequest'
+      responses:
+        '200':
+          description: トークン無効化成功
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # =============================================================================
+  # ユーザー管理
+  # =============================================================================
+  /users:
+    get:
+      summary: ユーザー一覧取得
+      operationId: getUsers
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - in: query
+          name: department_id
+          schema:
+            type: string
+            format: uuid
+          description: 部署IDでフィルタ
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/UserStatus'
+          description: ステータスでフィルタ
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: 名前・メールアドレス検索
+      responses:
+        '200':
+          description: ユーザー一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsersListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: ユーザー作成
+      operationId: createUser
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: ユーザー作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /users/{id}:
+    get:
+      summary: ユーザー詳細取得
+      operationId: getUser
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: ユーザー詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: ユーザー更新
+      operationId: updateUser
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: ユーザー更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: ユーザー削除
+      operationId: deleteUser
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: ユーザー削除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/{id}/status:
+    put:
+      summary: ユーザーステータス変更
+      operationId: updateUserStatus
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserStatusRequest'
+      responses:
+        '200':
+          description: ステータス変更成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/me:
+    get:
+      summary: 現在のユーザー情報取得
+      operationId: getCurrentUser
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 現在のユーザー情報
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/me/permissions:
+    get:
+      summary: 現在のユーザーの権限取得
+      operationId: getCurrentUserPermissions
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: module
+          schema:
+            $ref: '#/components/schemas/ModuleName'
+          description: 特定モジュールの権限のみ取得
+      responses:
+        '200':
+          description: ユーザー権限一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPermissionsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # =============================================================================
+  # 部署管理
+  # =============================================================================
+  /departments:
+    get:
+      summary: 部署階層取得
+      operationId: getDepartments
+      tags:
+        - Departments
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: flat
+          schema:
+            type: boolean
+            default: false
+          description: フラットリスト形式で取得
+      responses:
+        '200':
+          description: 部署階層
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: 部署作成
+      operationId: createDepartment
+      tags:
+        - Departments
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDepartmentRequest'
+      responses:
+        '201':
+          description: 部署作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /departments/{id}:
+    get:
+      summary: 部署詳細取得
+      operationId: getDepartment
+      tags:
+        - Departments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DepartmentId'
+      responses:
+        '200':
+          description: 部署詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: 部署更新
+      operationId: updateDepartment
+      tags:
+        - Departments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DepartmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDepartmentRequest'
+      responses:
+        '200':
+          description: 部署更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: 部署削除
+      operationId: deleteDepartment
+      tags:
+        - Departments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DepartmentId'
+      responses:
+        '200':
+          description: 部署削除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # =============================================================================
+  # ロール管理
+  # =============================================================================
+  /roles:
+    get:
+      summary: ロール階層取得
+      operationId: getRoles
+      tags:
+        - Roles
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: flat
+          schema:
+            type: boolean
+            default: false
+          description: フラットリスト形式で取得
+      responses:
+        '200':
+          description: ロール階層
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: ロール作成
+      operationId: createRole
+      tags:
+        - Roles
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+      responses:
+        '201':
+          description: ロール作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /roles/{id}:
+    get:
+      summary: ロール詳細取得
+      operationId: getRole
+      tags:
+        - Roles
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoleId'
+      responses:
+        '200':
+          description: ロール詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: ロール更新
+      operationId: updateRole
+      tags:
+        - Roles
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+      responses:
+        '200':
+          description: ロール更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: ロール削除
+      operationId: deleteRole
+      tags:
+        - Roles
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoleId'
+      responses:
+        '200':
+          description: ロール削除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /roles/{id}/permissions:
+    get:
+      summary: ロール権限取得
+      operationId: getRolePermissions
+      tags:
+        - Roles
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoleId'
+      responses:
+        '200':
+          description: ロール権限一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermissionsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: ロール権限割り当て
+      operationId: assignRolePermissions
+      tags:
+        - Roles
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignPermissionsRequest'
+      responses:
+        '200':
+          description: 権限割り当て成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # 権限管理
+  # =============================================================================
+  /permissions:
+    get:
+      summary: 権限マトリックス取得
+      operationId: getPermissions
+      tags:
+        - Permissions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: module
+          schema:
+            $ref: '#/components/schemas/ModuleName'
+          description: 特定モジュールの権限のみ取得
+      responses:
+        '200':
+          description: 権限マトリックス
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: 権限作成
+      operationId: createPermission
+      tags:
+        - Permissions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePermissionRequest'
+      responses:
+        '201':
+          description: 権限作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /permissions/{id}:
+    get:
+      summary: 権限詳細取得
+      operationId: getPermission
+      tags:
+        - Permissions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PermissionId'
+      responses:
+        '200':
+          description: 権限詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: 権限削除
+      operationId: deletePermission
+      tags:
+        - Permissions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PermissionId'
+      responses:
+        '200':
+          description: 権限削除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # ユーザースコープ管理
+  # =============================================================================
+  /users/{id}/scopes:
+    get:
+      summary: ユーザースコープ取得
+      operationId: getUserScopes
+      tags:
+        - User Scopes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - in: query
+          name: resource_type
+          schema:
+            $ref: '#/components/schemas/ResourceType'
+          description: 特定リソースタイプのスコープのみ取得
+      responses:
+        '200':
+          description: ユーザースコープ一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserScopesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      summary: ユーザースコープ作成
+      operationId: createUserScope
+      tags:
+        - User Scopes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserScopeRequest'
+      responses:
+        '201':
+          description: ユーザースコープ作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserScopeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/{user_id}/scopes/{scope_id}:
+    put:
+      summary: ユーザースコープ更新
+      operationId: updateUserScope
+      tags:
+        - User Scopes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+        - $ref: '#/components/parameters/ScopeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserScopeRequest'
+      responses:
+        '200':
+          description: ユーザースコープ更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserScopeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: ユーザースコープ削除
+      operationId: deleteUserScope
+      tags:
+        - User Scopes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+        - $ref: '#/components/parameters/ScopeId'
+      responses:
+        '200':
+          description: ユーザースコープ削除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # 承認フロー管理
+  # =============================================================================
+  /approval-states:
+    get:
+      summary: 承認状態一覧取得
+      operationId: getApprovalStates
+      tags:
+        - Approval States
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: resource_type
+          schema:
+            $ref: '#/components/schemas/ResourceType'
+          description: 特定リソースタイプの承認状態のみ取得
+      responses:
+        '200':
+          description: 承認状態一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalStatesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: 承認状態作成
+      operationId: createApprovalState
+      tags:
+        - Approval States
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApprovalStateRequest'
+      responses:
+        '201':
+          description: 承認状態作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalStateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /approval-states/{id}:
+    get:
+      summary: 承認状態詳細取得
+      operationId: getApprovalState
+      tags:
+        - Approval States
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ApprovalStateId'
+      responses:
+        '200':
+          description: 承認状態詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalStateResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: 承認状態更新
+      operationId: updateApprovalState
+      tags:
+        - Approval States
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ApprovalStateId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApprovalStateRequest'
+      responses:
+        '200':
+          description: 承認状態更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalStateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: 承認状態削除
+      operationId: deleteApprovalState
+      tags:
+        - Approval States
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ApprovalStateId'
+      responses:
+        '200':
+          description: 承認状態削除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # 時間制限管理
+  # =============================================================================
+  /users/{id}/time-restrictions:
+    get:
+      summary: ユーザー時間制限取得
+      operationId: getUserTimeRestrictions
+      tags:
+        - Time Restrictions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: ユーザー時間制限一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeRestrictionsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      summary: ユーザー時間制限作成
+      operationId: createUserTimeRestriction
+      tags:
+        - Time Restrictions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTimeRestrictionRequest'
+      responses:
+        '201':
+          description: 時間制限作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeRestrictionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/{user_id}/time-restrictions/{restriction_id}:
+    put:
+      summary: ユーザー時間制限更新
+      operationId: updateUserTimeRestriction
+      tags:
+        - Time Restrictions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+        - $ref: '#/components/parameters/RestrictionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTimeRestrictionRequest'
+      responses:
+        '200':
+          description: 時間制限更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeRestrictionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: ユーザー時間制限削除
+      operationId: deleteUserTimeRestriction
+      tags:
+        - Time Restrictions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+        - $ref: '#/components/parameters/RestrictionId'
+      responses:
+        '200':
+          description: 時間制限削除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # アクセス制御・権限チェック
+  # =============================================================================
+  /access/check:
+    post:
+      summary: 権限・ポリシーチェック
+      operationId: checkAccess
+      tags:
+        - Access Control
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessCheckRequest'
+      responses:
+        '200':
+          description: アクセス許可/拒否判定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessDecision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /resources/{type}/{id}/actions/{action}:
+    post:
+      summary: リソースアクション実行
+      operationId: executeResourceAction
+      tags:
+        - Access Control
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResourceType'
+        - $ref: '#/components/parameters/ResourceId'
+        - $ref: '#/components/parameters/ActionName'
+      requestBody:
+        description: アクション実行用の追加データ
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              example:
+                status: "PENDING"
+                department: "sales"
+                amount: 50000
+      responses:
+        '200':
+          description: アクション実行成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionExecutionResponse'
+        '403':
+          description: アクセス拒否
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessDecision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # 監査ログ
+  # =============================================================================
+  /audit-logs:
+    get:
+      summary: 監査ログ検索
+      operationId: getAuditLogs
+      tags:
+        - Audit Logs
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - in: query
+          name: user_id
+          schema:
+            type: string
+            format: uuid
+          description: ユーザーIDでフィルタ
+        - in: query
+          name: action
+          schema:
+            $ref: '#/components/schemas/ActionName'
+          description: アクションでフィルタ
+        - in: query
+          name: resource_type
+          schema:
+            $ref: '#/components/schemas/ResourceType'
+          description: リソースタイプでフィルタ
+        - in: query
+          name: resource_id
+          schema:
+            type: string
+          description: リソースIDでフィルタ
+        - in: query
+          name: result
+          schema:
+            $ref: '#/components/schemas/AuditResult'
+          description: 結果でフィルタ
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date-time
+          description: 開始日時
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date-time
+          description: 終了日時
+        - in: query
+          name: ip_address
+          schema:
+            type: string
+          description: IPアドレスでフィルタ
+      responses:
+        '200':
+          description: 監査ログ一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /audit-logs/stats:
+    get:
+      summary: 監査ログ統計
+      operationId: getAuditLogStats
+      tags:
+        - Audit Logs
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [day, week, month, year]
+            default: week
+          description: 統計期間
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date-time
+          description: 開始日時
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date-time
+          description: 終了日時
+        - in: query
+          name: user_id
+          schema:
+            type: string
+            format: uuid
+          description: ユーザーIDでフィルタ
+        - in: query
+          name: resource_type
+          schema:
+            $ref: '#/components/schemas/ResourceType'
+          description: リソースタイプでフィルタ
+      responses:
+        '200':
+          description: 監査ログ統計
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogStatsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # =============================================================================
+  # システム
+  # =============================================================================
+  /health:
+    get:
+      summary: ヘルスチェック
+      operationId: healthCheck
+      tags:
+        - System
+      responses:
+        '200':
+          description: システム正常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          description: システム異常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /version:
+    get:
+      summary: バージョン情報取得
+      operationId: getVersion
+      tags:
+        - System
+      responses:
+        '200':
+          description: バージョン情報
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer Token認証
+
+  parameters:
+    # 共通パラメータ
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: ページ番号
+
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+      description: 1ページあたりの件数
+
+    # エンティティID
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: ユーザーID
+
+    UserIdParam:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: ユーザーID
+
+    DepartmentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: 部署ID
+
+    RoleId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: ロールID
+
+    PermissionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: 権限ID
+
+    ScopeId:
+      name: scope_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: スコープID
+
+    ApprovalStateId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: 承認状態ID
+
+    RestrictionId:
+      name: restriction_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: 時間制限ID
+
+    # リソース関連
+    ResourceType:
+      name: type
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ResourceType'
+      description: リソースタイプ
+      example: "orders"
+
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: リソースID
+      example: "ord-12345"
+
+    ActionName:
+      name: action
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ActionName'
+      description: アクション名
+      example: "approve"
+
+  responses:
+    # 共通レスポンス
+    BadRequest:
+      description: リクエストが不正
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: 認証が必要
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: アクセス権限なし
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: リソースが見つからない
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Conflict:
+      description: リソース競合
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    # =============================================================================
+    # 基本スキーマ
+    # =============================================================================
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          description: エラーコード
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: エラーメッセージ
+          example: "Invalid input data"
+        details:
+          type: string
+          description: エラー詳細
+          example: "Field 'email' is required"
+      required:
+        - code
+        - message
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Operation completed successfully"
+      required:
+        - message
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          example: 100
+        total_pages:
+          type: integer
+          example: 10
+      required:
+        - page
+        - limit
+        - total
+        - total_pages
+
+    # =============================================================================
+    # 認証関連
+    # =============================================================================
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        password:
+          type: string
+          format: password
+          example: "password123"
+      required:
+        - email
+        - password
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWTアクセストークン
+        token_type:
+          type: string
+          example: "Bearer"
+        expires_in:
+          type: integer
+          description: トークン有効期限（秒）
+          example: 86400
+        user:
+          $ref: '#/components/schemas/UserResponse'
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - user
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: 新しいJWTアクセストークン
+        token_type:
+          type: string
+          example: "Bearer"
+        expires_in:
+          type: integer
+          description: トークン有効期限（秒）
+          example: 86400
+      required:
+        - access_token
+        - token_type
+        - expires_in
+
+    RevokeTokenRequest:
+      type: object
+      properties:
+        token_jti:
+          type: string
+          description: 無効化するトークンのJTI
+      required:
+        - token_jti
+
+    # =============================================================================
+    # Enum定義（v3改善）
+    # =============================================================================
+    UserStatus:
+      type: string
+      enum: [active, inactive, suspended]
+      description: ユーザーステータス
+
+    ScopeType:
+      type: string
+      enum: [department, region, project, location, customer, product, branch]
+      description: スコープタイプ
+
+    AuditResult:
+      type: string
+      enum: [SUCCESS, DENIED, ERROR]
+      description: 監査結果
+
+    # v3追加：主要Enum定義
+    ResourceType:
+      type: string
+      enum: 
+        - users
+        - departments
+        - roles
+        - permissions
+        - orders
+        - customers
+        - products
+        - inventory
+        - invoices
+        - reports
+        - settings
+        - approvals
+      description: リソースタイプ
+
+    ModuleName:
+      type: string
+      enum:
+        - users
+        - departments
+        - roles
+        - inventory
+        - orders
+        - customers
+        - products
+        - finance
+        - reports
+        - settings
+        - audit
+        - system
+      description: システムモジュール名
+
+    ActionName:
+      type: string
+      enum:
+        - view
+        - create
+        - update
+        - delete
+        - approve
+        - reject
+        - cancel
+        - submit
+        - export
+        - import
+        - assign
+        - revoke
+        - activate
+        - deactivate
+        - suspend
+        - restore
+      description: アクション名
+
+    ReasonCode:
+      type: string
+      enum:
+        - NO_MATRIX_PERMISSION
+        - TIME_RESTRICTION_DENIED
+        - SCOPE_RESTRICTION_DENIED
+        - APPROVAL_REQUIRED
+        - USER_INACTIVE
+        - USER_SUSPENDED
+        - ROLE_INSUFFICIENT
+        - DEPARTMENT_RESTRICTED
+        - RESOURCE_NOT_FOUND
+        - SYSTEM_MAINTENANCE
+        - CONCURRENT_ACCESS_DENIED
+        - RATE_LIMIT_EXCEEDED
+      description: アクセス制御理由コード
+
+    # =============================================================================
+    # ユーザー関連
+    # =============================================================================
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        department_id:
+          type: string
+          format: uuid
+        department_name:
+          type: string
+        role_id:
+          type: string
+          format: uuid
+        role_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - first_name
+        - last_name
+        - status
+        - department_id
+        - role_id
+        - created_at
+
+    UserDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/UserResponse'
+        - type: object
+          properties:
+            permissions:
+              type: array
+              items:
+                $ref: '#/components/schemas/PermissionResponse'
+            scopes:
+              type: array
+              items:
+                $ref: '#/components/schemas/UserScopeResponse'
+            time_restrictions:
+              type: array
+              items:
+                $ref: '#/components/schemas/TimeRestrictionResponse'
+
+    CreateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+        first_name:
+          type: string
+          minLength: 1
+        last_name:
+          type: string
+          minLength: 1
+        department_id:
+          type: string
+          format: uuid
+        role_id:
+          type: string
+          format: uuid
+      required:
+        - email
+        - password
+        - first_name
+        - last_name
+        - department_id
+        - role_id
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+          minLength: 1
+        last_name:
+          type: string
+          minLength: 1
+        department_id:
+          type: string
+          format: uuid
+        role_id:
+          type: string
+          format: uuid
+
+    UpdateUserStatusRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/UserStatus'
+      required:
+        - status
+
+    UsersListResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+        - users
+        - pagination
+
+    UserPermissionsResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        permissions:
+          type: array
+          items:
+            type: object
+            properties:
+              module:
+                $ref: '#/components/schemas/ModuleName'
+              action:
+                $ref: '#/components/schemas/ActionName'
+            required:
+              - module
+              - action
+        modules:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/ActionName'
+          example:
+            inventory: ["view", "update"]
+            orders: ["create", "approve"]
+      required:
+        - user_id
+        - permissions
+        - modules
+
+    # =============================================================================
+    # 部署関連
+    # =============================================================================
+    DepartmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        level:
+          type: integer
+          description: 階層レベル
+        full_path:
+          type: string
+          description: 階層パス
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/DepartmentResponse'
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - created_at
+
+    DepartmentDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/DepartmentResponse'
+        - type: object
+          properties:
+            user_count:
+              type: integer
+              description: 所属ユーザー数
+            ancestors:
+              type: array
+              items:
+                $ref: '#/components/schemas/DepartmentResponse'
+              description: 上位部署
+
+    CreateDepartmentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+        - name
+
+    UpdateDepartmentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    DepartmentsResponse:
+      type: object
+      properties:
+        departments:
+          type: array
+          items:
+            $ref: '#/components/schemas/DepartmentResponse'
+        flat:
+          type: boolean
+          description: フラット表示かどうか
+      required:
+        - departments
+        - flat
+
+    # =============================================================================
+    # ロール関連
+    # =============================================================================
+    RoleResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        level:
+          type: integer
+          description: 階層レベル
+        full_path:
+          type: string
+          description: 階層パス
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleResponse'
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - created_at
+
+    RoleDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/RoleResponse'
+        - type: object
+          properties:
+            permissions:
+              type: array
+              items:
+                $ref: '#/components/schemas/PermissionResponse'
+            user_count:
+              type: integer
+              description: 割り当てユーザー数
+            ancestors:
+              type: array
+              items:
+                $ref: '#/components/schemas/RoleResponse'
+              description: 上位ロール
+
+    CreateRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+        - name
+
+    # v3改善：requiredフィールド追加
+    UpdateRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    RolesResponse:
+      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleResponse'
+        flat:
+          type: boolean
+          description: フラット表示かどうか
+      required:
+        - roles
+        - flat
+
+    RolePermissionsResponse:
+      type: object
+      properties:
+        role_id:
+          type: string
+          format: uuid
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionResponse'
+        inherited_permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionResponse'
+          description: 上位ロールから継承した権限
+      required:
+        - role_id
+        - permissions
+        - inherited_permissions
+
+    AssignPermissionsRequest:
+      type: object
+      properties:
+        permission_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+      required:
+        - permission_ids
+
+    # =============================================================================
+    # 権限関連
+    # =============================================================================
+    PermissionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        module:
+          $ref: '#/components/schemas/ModuleName'
+        action:
+          $ref: '#/components/schemas/ActionName'
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - module
+        - action
+        - created_at
+
+    CreatePermissionRequest:
+      type: object
+      properties:
+        module:
+          $ref: '#/components/schemas/ModuleName'
+        action:
+          $ref: '#/components/schemas/ActionName'
+        description:
+          type: string
+      required:
+        - module
+        - action
+
+    PermissionsResponse:
+      type: object
+      properties:
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionResponse'
+        matrix:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/ActionName'
+          description: モジュール別権限マトリックス
+          example:
+            inventory: ["view", "update", "delete"]
+            orders: ["create", "approve", "cancel"]
+      required:
+        - permissions
+        - matrix
+
+    # =============================================================================
+    # ユーザースコープ関連
+    # =============================================================================
+    UserScopeResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: string
+          format: uuid
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+        resource_id:
+          type: string
+          nullable: true
+        scope_type:
+          $ref: '#/components/schemas/ScopeType'
+        scope_value:
+          type: object
+          additionalProperties: true
+          description: JSONB形式のスコープ値
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - user_id
+        - resource_type
+        - scope_type
+        - scope_value
+        - created_at
+
+    CreateUserScopeRequest:
+      type: object
+      properties:
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+        resource_id:
+          type: string
+          nullable: true
+        scope_type:
+          $ref: '#/components/schemas/ScopeType'
+        scope_value:
+          type: object
+          additionalProperties: true
+          description: JSONB形式のスコープ値
+      required:
+        - resource_type
+        - scope_type
+        - scope_value
+
+    UpdateUserScopeRequest:
+      type: object
+      properties:
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+        resource_id:
+          type: string
+          nullable: true
+        scope_type:
+          $ref: '#/components/schemas/ScopeType'
+        scope_value:
+          type: object
+          additionalProperties: true
+          description: JSONB形式のスコープ値
+      required:
+        - resource_type
+        - scope_type
+        - scope_value
+
+    UserScopesResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserScopeResponse'
+      required:
+        - user_id
+        - scopes
+
+    # =============================================================================
+    # 承認状態関連
+    # =============================================================================
+    ApprovalStateResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        state_name:
+          type: string
+        approver_role_id:
+          type: string
+          format: uuid
+        approver_role_name:
+          type: string
+        step_order:
+          type: integer
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+          nullable: true
+        scope:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: JSONB形式のスコープ条件
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - state_name
+        - approver_role_id
+        - step_order
+        - created_at
+
+    CreateApprovalStateRequest:
+      type: object
+      properties:
+        state_name:
+          type: string
+          minLength: 1
+        approver_role_id:
+          type: string
+          format: uuid
+        step_order:
+          type: integer
+          minimum: 1
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+          nullable: true
+        scope:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: JSONB形式のスコープ条件
+      required:
+        - state_name
+        - approver_role_id
+        - step_order
+
+    UpdateApprovalStateRequest:
+      type: object
+      properties:
+        state_name:
+          type: string
+          minLength: 1
+        approver_role_id:
+          type: string
+          format: uuid
+        step_order:
+          type: integer
+          minimum: 1
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+          nullable: true
+        scope:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: JSONB形式のスコープ条件
+
+    ApprovalStatesResponse:
+      type: object
+      properties:
+        approval_states:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalStateResponse'
+        by_resource_type:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/ApprovalStateResponse'
+          description: リソースタイプ別承認状態
+      required:
+        - approval_states
+        - by_resource_type
+
+    # =============================================================================
+    # 時間制限関連
+    # =============================================================================
+    TimeRestrictionResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: string
+          format: uuid
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+        start_time:
+          type: string
+          format: time
+          nullable: true
+        end_time:
+          type: string
+          format: time
+          nullable: true
+        allowed_days:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+          description: 許可曜日 [1=月, 2=火, ..., 7=日]
+        timezone:
+          type: string
+          default: "UTC"
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - user_id
+        - resource_type
+        - timezone
+        - created_at
+
+    CreateTimeRestrictionRequest:
+      type: object
+      properties:
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+        start_time:
+          type: string
+          format: time
+          nullable: true
+        end_time:
+          type: string
+          format: time
+          nullable: true
+        allowed_days:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+          description: 許可曜日 [1=月, 2=火, ..., 7=日]
+        timezone:
+          type: string
+          default: "UTC"
+      required:
+        - resource_type
+
+    UpdateTimeRestrictionRequest:
+      type: object
+      properties:
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+        start_time:
+          type: string
+          format: time
+          nullable: true
+        end_time:
+          type: string
+          format: time
+          nullable: true
+        allowed_days:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+          description: 許可曜日 [1=月, 2=火, ..., 7=日]
+        timezone:
+          type: string
+      required:
+        - resource_type
+
+    TimeRestrictionsResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        time_restrictions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimeRestrictionResponse'
+      required:
+        - user_id
+        - time_restrictions
+
+    # =============================================================================
+    # アクセス制御関連
+    # =============================================================================
+    AccessCheckRequest:
+      type: object
+      properties:
+        module:
+          $ref: '#/components/schemas/ModuleName'
+          description: 権限チェック対象モジュール
+        action:
+          $ref: '#/components/schemas/ActionName'
+          description: 実行アクション
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+          description: リソースタイプ
+        resource_id:
+          type: string
+          description: リソースID
+        context:
+          type: object
+          additionalProperties: true
+          description: ポリシー評価用追加コンテキスト
+          example:
+            status: "PENDING"
+            department: "sales"
+            amount: 50000
+      required:
+        - module
+        - action
+
+    AccessDecision:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+          description: アクセス許可フラグ
+        reason_code:
+          $ref: '#/components/schemas/ReasonCode'
+          description: 判定理由コード
+        explanation:
+          type: string
+          description: 判定理由説明
+        policy_results:
+          type: array
+          items:
+            type: object
+            properties:
+              policy_name:
+                type: string
+              result:
+                type: boolean
+              reason:
+                type: string
+            required:
+              - policy_name
+              - result
+              - reason
+          description: 個別ポリシー評価結果
+        evaluated_at:
+          type: string
+          format: date-time
+          description: 評価実行時刻
+      required:
+        - allowed
+        - reason_code
+        - explanation
+        - evaluated_at
+      example:
+        allowed: false
+        reason_code: "NO_MATRIX_PERMISSION"
+        explanation: "ロールに操作権限がありません"
+        policy_results: [
+          {
+            "policy_name": "PermissionMatrixPolicy",
+            "result": false,
+            "reason": "権限マトリックスに該当権限なし"
+          },
+          {
+            "policy_name": "TimeRestrictionPolicy", 
+            "result": true,
+            "reason": "営業時間内"
+          }
+        ]
+        evaluated_at: "2024-01-15T10:30:00Z"
+
+    ActionExecutionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: アクション実行成功フラグ
+        result:
+          type: object
+          properties:
+            status:
+              type: string
+            message:
+              type: string
+            data:
+              type: object
+              additionalProperties: true
+          required:
+            - status
+          description: アクション実行結果
+        access_decision:
+          $ref: '#/components/schemas/AccessDecision'
+        executed_at:
+          type: string
+          format: date-time
+          description: 実行時刻
+      required:
+        - success
+        - access_decision
+        - executed_at
+
+    # =============================================================================
+    # 監査ログ関連
+    # =============================================================================
+    AuditLogResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: string
+          format: uuid
+        user_name:
+          type: string
+        action:
+          $ref: '#/components/schemas/ActionName'
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+        resource_id:
+          type: string
+        result:
+          $ref: '#/components/schemas/AuditResult'
+        reason:
+          type: string
+          nullable: true
+        reason_code:
+          $ref: '#/components/schemas/ReasonCode'
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - id
+        - user_id
+        - action
+        - resource_type
+        - resource_id
+        - result
+        - timestamp
+
+    AuditLogsResponse:
+      type: object
+      properties:
+        audit_logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+        summary:
+          type: object
+          properties:
+            total_success:
+              type: integer
+            total_denied:
+              type: integer
+            total_error:
+              type: integer
+          required:
+            - total_success
+            - total_denied
+            - total_error
+      required:
+        - audit_logs
+        - pagination
+        - summary
+
+    AuditLogStatsResponse:
+      type: object
+      properties:
+        period:
+          type: string
+          enum: [day, week, month, year]
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        total_requests:
+          type: integer
+        success_rate:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        by_result:
+          type: object
+          properties:
+            SUCCESS:
+              type: integer
+            DENIED:
+              type: integer
+            ERROR:
+              type: integer
+          required:
+            - SUCCESS
+            - DENIED
+            - ERROR
+        by_action:
+          type: object
+          additionalProperties:
+            type: integer
+        by_resource_type:
+          type: object
+          additionalProperties:
+            type: integer
+        by_user:
+          type: array
+          items:
+            type: object
+            properties:
+              user_id:
+                type: string
+                format: uuid
+              user_name:
+                type: string
+              request_count:
+                type: integer
+            required:
+              - user_id
+              - user_name
+              - request_count
+        timeline:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              success_count:
+                type: integer
+              denied_count:
+                type: integer
+              error_count:
+                type: integer
+            required:
+              - date
+              - success_count
+              - denied_count
+              - error_count
+      required:
+        - period
+        - start_date
+        - end_date
+        - total_requests
+        - success_rate
+        - by_result
+        - by_action
+        - by_resource_type
+        - by_user
+        - timeline
+
+    # =============================================================================
+    # システム関連
+    # =============================================================================
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+        timestamp:
+          type: string
+          format: date-time
+        database:
+          type: string
+          enum: [ok, error]
+        version:
+          type: string
+        uptime:
+          type: string
+          description: サーバー稼働時間
+        checks:
+          type: object
+          properties:
+            database_connection:
+              type: boolean
+            jwt_signing:
+              type: boolean
+            cache_connection:
+              type: boolean
+          required:
+            - database_connection
+            - jwt_signing
+      required:
+        - status
+        - timestamp
+        - database
+        - version
+        - uptime
+        - checks
+
+    VersionResponse:
+      type: object
+      properties:
+        version:
+          type: string
+          example: "3.0.0"
+        build_time:
+          type: string
+          format: date-time
+        commit_hash:
+          type: string
+          example: "abc123def456"
+        go_version:
+          type: string
+          example: "go1.24.5"
+        api_version:
+          type: string
+          example: "v1"
+      required:
+        - version
+        - build_time
+        - api_version
+
+# =============================================================================
+# セキュリティ設定
+# =============================================================================
+security:
+  - BearerAuth: []
+
+# =============================================================================
+# タグ
+# =============================================================================
+tags:
+  - name: Authentication
+    description: 認証・認可・トークン管理
+  - name: Users
+    description: ユーザー管理
+  - name: Departments
+    description: 部署管理・階層構造
+  - name: Roles  
+    description: ロール管理・階層構造・権限割り当て
+  - name: Permissions
+    description: 権限マトリックス管理
+  - name: User Scopes
+    description: ユーザースコープ管理・JSONB値制御
+  - name: Approval States
+    description: 承認フロー・多段階承認管理
+  - name: Time Restrictions
+    description: 時間制限・営業時間制御
+  - name: Access Control
+    description: アクセス制御・権限チェック・リソースアクション
+  - name: Audit Logs
+    description: 監査ログ・アクセス履歴・統計
+  - name: System
+    description: システム情報・ヘルスチェック

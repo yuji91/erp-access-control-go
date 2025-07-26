@@ -1,0 +1,214 @@
+services:
+  # PostgreSQL データベース
+  postgres:
+    image: postgres:16-alpine
+    container_name: erp-postgres
+    environment:
+      POSTGRES_DB: erp_access_control
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: erp_password_2024
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+      TZ: Asia/Tokyo
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    networks:
+      - erp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_user -d erp_access_control"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # PostgreSQL テスト用データベース
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: erp-postgres-test
+    environment:
+      POSTGRES_DB: erp_access_control_test
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: erp_password_2024
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+      TZ: Asia/Tokyo
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    networks:
+      - erp-network
+    profiles:
+      - test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_user -d erp_access_control_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis (将来のキャッシュ・セッション管理用)
+  redis:
+    image: redis:7-alpine
+    container_name: erp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - erp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    command: >
+      --requirepass erp_redis_password_2024
+
+  # アプリケーション (開発時用)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: erp-app
+    environment:
+      # アプリケーション設定
+      APP_NAME: erp-access-control-api
+      APP_ENV: development
+      SERVER_PORT: 8080
+      SERVER_HOST: 0.0.0.0
+      
+      # データベース設定
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: erp_user
+      DB_PASSWORD: erp_password_2024
+      DB_NAME: erp_access_control
+      DB_SSLMODE: disable
+      DB_TIMEZONE: Asia/Tokyo
+      
+      # JWT設定
+      JWT_SECRET: erp-jwt-secret-key-for-portfolio-demo-2024
+      JWT_ACCESS_TOKEN_DURATION: 15m
+      JWT_REFRESH_TOKEN_DURATION: 168h
+      JWT_ISSUER: erp-access-control-api
+      
+      # Redis設定
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: erp_redis_password_2024
+      REDIS_DB: 0
+      
+      # ログ設定
+      LOG_LEVEL: debug
+      LOG_FORMAT: json
+      LOG_OUTPUT: stdout
+      
+      # セキュリティ設定
+      BCRYPT_COST: 10
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8080,http://localhost:3001
+      
+      # OpenAPI設定
+      SWAGGER_ENABLED: true
+      SWAGGER_HOST: localhost:8080
+      
+      # その他
+      DEBUG_ENABLED: true
+      DEBUG_SQL_QUERIES: true
+    ports:
+      - "8080:8080"
+      - "9090:9090"  # メトリクス用
+    volumes:
+      - .:/app
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - erp-network
+    profiles:
+      - app
+    restart: unless-stopped
+    command: ["go", "run", "cmd/server/main.go"]
+
+  # pgAdmin (データベース管理用)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: erp-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@erp-demo.com
+      PGADMIN_DEFAULT_PASSWORD: admin_password_2024
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - erp-network
+    profiles:
+      - tools
+    restart: unless-stopped
+
+  # Redis Commander (Redis管理用)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: erp-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:erp_redis_password_2024
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - erp-network
+    profiles:
+      - tools
+    restart: unless-stopped
+
+  # マイグレーション専用コンテナ
+  migrate:
+    image: migrate/migrate:latest
+    container_name: erp-migrate
+    volumes:
+      - ./migrations:/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - erp-network
+    profiles:
+      - migrate
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://erp_user:erp_password_2024@postgres:5432/erp_access_control?sslmode=disable",
+      "up"
+    ]
+
+# ネットワーク定義
+networks:
+  erp-network:
+    driver: bridge
+    name: erp-access-control-network
+
+# ボリューム定義
+volumes:
+  postgres_data:
+    name: erp-postgres-data
+  postgres_test_data:
+    name: erp-postgres-test-data
+  redis_data:
+    name: erp-redis-data
+  pgadmin_data:
+    name: erp-pgadmin-data
+  go_mod_cache:
+    name: erp-go-mod-cache
+  go_build_cache:
+    name: erp-go-build-cache 

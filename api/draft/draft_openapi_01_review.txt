@@ -1,0 +1,2 @@
+draft_openapi_01.yaml 作成後に、migrationファイルの拡張や完成版を作成したので、
+draft_openapi_02.yaml に差分を追加した。
