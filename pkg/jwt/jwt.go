@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// CustomClaims defines the JWT custom claims structure
+// CustomClaims JWTカスタムクレーム構造体を定義
 type CustomClaims struct {
 	UserID      uuid.UUID `json:"user_id"`
 	Email       string    `json:"email"`
@@ -16,13 +16,13 @@ type CustomClaims struct {
 	jwt.RegisteredClaims
 }
 
-// Service handles JWT operations
+// Service JWT操作を担当するサービス
 type Service struct {
 	secretKey []byte
 	expiresIn time.Duration
 }
 
-// NewService creates a new JWT service instance
+// NewService 新しいJWTサービスインスタンスを作成
 func NewService(secret string, expiresIn time.Duration) *Service {
 	return &Service{
 		secretKey: []byte(secret),
@@ -30,7 +30,7 @@ func NewService(secret string, expiresIn time.Duration) *Service {
 	}
 }
 
-// GenerateToken creates a new JWT token for a user
+// GenerateToken ユーザー用の新しいJWTトークンを作成
 func (s *Service) GenerateToken(userID uuid.UUID, email string, permissions []string) (string, error) {
 	claims := CustomClaims{
 		UserID:      userID,
@@ -50,7 +50,7 @@ func (s *Service) GenerateToken(userID uuid.UUID, email string, permissions []st
 	return token.SignedString(s.secretKey)
 }
 
-// ValidateToken validates and parses a JWT token
+// ValidateToken JWTトークンを検証・解析
 func (s *Service) ValidateToken(tokenString string) (*CustomClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -70,7 +70,7 @@ func (s *Service) ValidateToken(tokenString string) (*CustomClaims, error) {
 	return nil, fmt.Errorf("invalid token")
 }
 
-// GetTokenID extracts the JTI (JWT ID) from token claims
+// GetTokenID トークンクレームからJTI（JWT ID）を抽出
 func (s *Service) GetTokenID(tokenString string) (string, error) {
 	claims, err := s.ValidateToken(tokenString)
 	if err != nil {
@@ -79,13 +79,13 @@ func (s *Service) GetTokenID(tokenString string) (string, error) {
 	return claims.ID, nil
 }
 
-// RefreshToken generates a new token with the same claims but new expiration
+// RefreshToken 同じクレームで新しい有効期限を持つトークンを生成
 func (s *Service) RefreshToken(tokenString string) (string, error) {
 	claims, err := s.ValidateToken(tokenString)
 	if err != nil {
 		return "", err
 	}
 
-	// Generate new token with same user data but new expiration
+	// 同じユーザーデータで新しい有効期限のトークンを生成
 	return s.GenerateToken(claims.UserID, claims.Email, claims.Permissions)
 }

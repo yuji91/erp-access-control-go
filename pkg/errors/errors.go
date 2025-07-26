@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// APIError represents a structured API error
+// APIError 構造化されたAPIエラーを表現
 type APIError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -17,7 +17,7 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-// Common error codes
+// 共通エラーコード
 const (
 	ErrCodeValidation       = "VALIDATION_ERROR"
 	ErrCodeAuthentication   = "AUTHENTICATION_ERROR"
@@ -30,7 +30,7 @@ const (
 	ErrCodePermissionDenied = "PERMISSION_DENIED"
 )
 
-// Predefined errors
+// 定義済みエラー
 var (
 	ErrInvalidToken = &APIError{
 		Code:    ErrCodeInvalidToken,
@@ -57,7 +57,7 @@ var (
 	}
 )
 
-// NewValidationError creates a new validation error
+// NewValidationError 新しいバリデーションエラーを作成
 func NewValidationError(field, message string) *APIError {
 	return &APIError{
 		Code:    ErrCodeValidation,
@@ -67,7 +67,7 @@ func NewValidationError(field, message string) *APIError {
 	}
 }
 
-// NewAuthenticationError creates a new authentication error
+// NewAuthenticationError 新しい認証エラーを作成
 func NewAuthenticationError(message string) *APIError {
 	return &APIError{
 		Code:    ErrCodeAuthentication,
@@ -77,7 +77,7 @@ func NewAuthenticationError(message string) *APIError {
 	}
 }
 
-// NewAuthorizationError creates a new authorization error
+// NewAuthorizationError 新しい認可エラーを作成
 func NewAuthorizationError(message string) *APIError {
 	return &APIError{
 		Code:    ErrCodeAuthorization,
@@ -87,7 +87,7 @@ func NewAuthorizationError(message string) *APIError {
 	}
 }
 
-// NewDatabaseError creates a new database error
+// NewDatabaseError 新しいデータベースエラーを作成
 func NewDatabaseError(err error) *APIError {
 	return &APIError{
 		Code:    ErrCodeDatabase,
@@ -97,7 +97,7 @@ func NewDatabaseError(err error) *APIError {
 	}
 }
 
-// NewInternalError creates a new internal server error
+// NewInternalError 新しい内部サーバーエラーを作成
 func NewInternalError(message string) *APIError {
 	return &APIError{
 		Code:    ErrCodeInternal,

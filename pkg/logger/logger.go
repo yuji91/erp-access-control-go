@@ -33,34 +33,34 @@ import (
 	"os"
 )
 
-// Logger basic logger implementation (development only)
+// Logger 基本ログ実装（開発用のみ）
 type Logger struct {
 	*log.Logger
 }
 
-// NewLogger creates a new basic logger
+// NewLogger 新しい基本ロガーを作成
 func NewLogger() *Logger {
 	return &Logger{
 		Logger: log.New(os.Stdout, "[ERP-API] ", log.LstdFlags|log.Lshortfile),
 	}
 }
 
-// Info logs info level message
+// Info 情報レベルのメッセージをログ出力
 func (l *Logger) Info(msg string) {
 	l.Printf("INFO: %s", msg)
 }
 
-// Error logs error level message
+// Error エラーレベルのメッセージをログ出力
 func (l *Logger) Error(msg string) {
 	l.Printf("ERROR: %s", msg)
 }
 
-// Warn logs warning level message
+// Warn 警告レベルのメッセージをログ出力
 func (l *Logger) Warn(msg string) {
 	l.Printf("WARN: %s", msg)
 }
 
-// Debug logs debug level message
+// Debug デバッグレベルのメッセージをログ出力
 func (l *Logger) Debug(msg string) {
 	l.Printf("DEBUG: %s", msg)
 } 
