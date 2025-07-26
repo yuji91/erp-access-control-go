@@ -14,6 +14,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d
+      - ./migrations:/migrations
+      - ./seeds:/seeds
     networks:
       - erp-network
     healthcheck:
@@ -21,7 +23,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
+    restart: ${DOCKER_RESTART_POLICY:-unless-stopped}
 
   # PostgreSQL テスト用データベース
   postgres-test:
@@ -46,7 +48,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
+    restart: ${DOCKER_RESTART_POLICY:-unless-stopped}
 
   # Redis (将来のキャッシュ・セッション管理用)
   redis:
@@ -63,7 +65,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
+    restart: ${DOCKER_RESTART_POLICY:-unless-stopped}
     command: >
       --requirepass erp_redis_password_2024
 
@@ -134,7 +136,7 @@ services:
       - erp-network
     profiles:
       - app
-    restart: unless-stopped
+    restart: ${DOCKER_RESTART_POLICY:-unless-stopped}
     command: ["go", "run", "cmd/server/main.go"]
 
   # pgAdmin (データベース管理用)
@@ -155,7 +157,7 @@ services:
       - erp-network
     profiles:
       - tools
-    restart: unless-stopped
+    restart: ${DOCKER_RESTART_POLICY:-unless-stopped}
 
   # Redis Commander (Redis管理用)
   redis-commander:
@@ -171,7 +173,7 @@ services:
       - erp-network
     profiles:
       - tools
-    restart: unless-stopped
+    restart: ${DOCKER_RESTART_POLICY:-unless-stopped}
 
   # マイグレーション専用コンテナ
   migrate:

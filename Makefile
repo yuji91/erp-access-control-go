@@ -87,6 +87,29 @@ setup: ## 🚀 開発環境の初期セットアップ
 	@$(MAKE) db-setup
 	@echo "$(GREEN)✅ セットアップ完了！$(RESET)"
 
+.PHONY: setup-docker
+setup-docker: ## 🐳 Docker環境の完全セットアップ
+	@echo "$(CYAN)🐳 Docker環境セットアップ開始...$(RESET)"
+	@echo "$(BLUE)📦 Docker Compose起動中...$(RESET)"
+	@$(MAKE) docker-up
+	@echo "$(BLUE)⏳ PostgreSQL起動待機中...$(RESET)"
+	@sleep 5
+	@echo "$(BLUE)⬆️ マイグレーション実行中...$(RESET)"
+	@$(MAKE) docker-migrate-sql
+	@echo "$(GREEN)✅ Docker環境セットアップ完了！$(RESET)"
+	@echo "$(YELLOW)🌐 利用可能なサービス:$(RESET)"
+	@echo "  📊 API: http://localhost:8080"
+	@echo "  🗄️  pgAdmin: http://localhost:5050 (admin@erp-demo.com / admin_password_2024)"
+	@echo "  🔵 Redis Commander: http://localhost:8081"
+
+.PHONY: setup-dev
+setup-dev: ## 💻 開発環境の完全セットアップ（Docker + アプリ）
+	@echo "$(CYAN)💻 開発環境セットアップ開始...$(RESET)"
+	@$(MAKE) setup-docker
+	@echo "$(BLUE)🚀 アプリケーション起動中...$(RESET)"
+	@$(MAKE) run
+	@echo "$(GREEN)✅ 開発環境セットアップ完了！$(RESET)"
+
 .PHONY: setup-dirs
 setup-dirs: ## 📁 必要ディレクトリの作成
 	@echo "$(BLUE)📁 ディレクトリ作成中...$(RESET)"
@@ -119,8 +142,10 @@ build: ## 🔨 アプリケーションのビルド
 	@echo "$(GREEN)✅ ビルド完了: $(BIN_DIR)/$(APP_NAME)$(RESET)"
 
 .PHONY: run
-run: ## 🏃 開発サーバーの起動
-	@echo "$(BLUE)🏃 サーバー起動中...$(RESET)"
+run: ## 🏃 ローカル開発サーバーの起動
+	@echo "$(BLUE)🏃 ローカル開発サーバー起動中...$(RESET)"
+	@echo "$(YELLOW)⚠️  注意: Docker環境が起動中の場合はポート8080が使用中です$(RESET)"
+	@echo "$(YELLOW)💡 Docker環境停止: make docker-down$(RESET)"
 	@go run cmd/server/main.go
 
 .PHONY: run-build
@@ -410,8 +435,38 @@ docker-up-dev: ## 💻 Docker開発環境起動（DB+Redis+App）
 .PHONY: docker-down
 docker-down: ## 🛑 Docker Compose停止
 	@echo "$(YELLOW)🛑 Docker Compose停止中...$(RESET)"
-	@docker-compose down
+	@docker-compose down --remove-orphans
 	@echo "$(GREEN)✅ Docker Compose停止完了$(RESET)"
+
+.PHONY: docker-down-force
+docker-down-force: ## 🛑 Docker Compose強制停止（コンテナ削除）
+	@echo "$(RED)🛑 Docker Compose強制停止中...$(RESET)"
+	@echo "$(YELLOW)⚠️  注意: コンテナが完全に削除されます$(RESET)"
+	@docker-compose down --remove-orphans --volumes
+	@docker system prune -f
+	@echo "$(GREEN)✅ Docker Compose強制停止完了$(RESET)"
+
+.PHONY: docker-down-clean
+docker-down-clean: ## 🧹 Docker環境完全クリーンアップ
+	@echo "$(RED)🧹 Docker環境完全クリーンアップ中...$(RESET)"
+	@echo "$(YELLOW)⚠️  注意: コンテナ・ボリューム・ネットワークが削除されます$(RESET)"
+	@docker-compose down --remove-orphans --volumes --rmi all
+	@docker system prune -af
+	@docker volume prune -f
+	@docker network prune -f
+	@echo "$(GREEN)✅ Docker環境完全クリーンアップ完了$(RESET)"
+
+.PHONY: docker-up-dev-no-restart
+docker-up-dev-no-restart: ## 🚀 Docker開発環境起動（自動再起動無効）
+	@echo "$(BLUE)🚀 Docker開発環境起動中（自動再起動無効）...$(RESET)"
+	@DOCKER_RESTART_POLICY=no docker-compose --profile app up -d
+	@echo "$(GREEN)✅ Docker開発環境起動完了（自動再起動無効）$(RESET)"
+
+.PHONY: docker-up-no-restart
+docker-up-no-restart: ## 🚀 Docker基本環境起動（自動再起動無効）
+	@echo "$(BLUE)🚀 Docker基本環境起動中（自動再起動無効）...$(RESET)"
+	@DOCKER_RESTART_POLICY=no docker-compose up -d postgres redis
+	@echo "$(GREEN)✅ Docker基本環境起動完了（自動再起動無効）$(RESET)"
 
 .PHONY: docker-down-volumes
 docker-down-volumes: ## 🗑️ Docker Compose停止（ボリューム削除）
@@ -539,6 +594,58 @@ docker-migrate: ## ⬆️ Dockerマイグレーション実行
 	@echo "$(BLUE)⬆️ Dockerマイグレーション実行中...$(RESET)"
 	@docker-compose --profile migrate run --rm migrate
 	@echo "$(GREEN)✅ Dockerマイグレーション完了$(RESET)"
+
+.PHONY: docker-migrate-sql
+docker-migrate-sql: ## ⬆️ マイグレーション実行（Docker）
+	@echo "$(BLUE)⬆️ マイグレーション実行中...$(RESET)"
+	@echo "$(YELLOW)📋 実行対象ファイル:$(RESET)"
+	@ls -la migrations/*.sql
+	@echo ""
+	@echo "$(YELLOW)🔄 マイグレーション実行順序:$(RESET)"
+	@for file in migrations/*.sql; do \
+		echo "  $$(basename $$file)"; \
+		echo "    docker exec erp-postgres psql -U erp_user -d erp_access_control -f /migrations/$$(basename $$file)"; \
+	done
+	@echo ""
+	@echo "$(BLUE)🚀 マイグレーション実行開始...$(RESET)"
+	@for file in migrations/*.sql; do \
+		echo "$(YELLOW)📄 実行中: $$(basename $$file)$(RESET)"; \
+		docker exec erp-postgres psql -U erp_user -d erp_access_control -f /migrations/$$(basename $$file) || { echo "$(RED)❌ マイグレーション失敗: $$(basename $$file)$(RESET)"; exit 1; }; \
+		echo "$(GREEN)✅ 完了: $$(basename $$file)$(RESET)"; \
+	done
+	@echo "$(GREEN)✅ 全マイグレーション完了$(RESET)"
+
+.PHONY: docker-seed
+docker-seed: ## 🌱 シードデータ投入（Docker）
+	@echo "$(BLUE)🌱 シードデータ投入中...$(RESET)"
+	@if [ ! -d seeds ]; then echo "$(YELLOW)⚠️  seedsディレクトリが見つかりません$(RESET)"; exit 1; fi
+	@if [ ! -f docker-compose.yml ]; then echo "$(RED)❌ docker-compose.ymlが見つかりません$(RESET)"; exit 1; fi
+	@echo "$(YELLOW)📋 実行対象ファイル:$(RESET)"
+	@ls -la seeds/*.sql 2>/dev/null || echo "$(YELLOW)⚠️  シードファイルが見つかりません$(RESET)"
+	@echo ""
+	@echo "$(BLUE)🚀 シードデータ投入開始...$(RESET)"
+	@for file in seeds/*.sql; do \
+		if [ -f "$$file" ]; then \
+			echo "$(YELLOW)📄 実行中: $$(basename $$file)$(RESET)"; \
+			docker exec erp-postgres psql -U erp_user -d erp_access_control -f /seeds/$$(basename $$file) || { echo "$(RED)❌ シード投入失敗: $$(basename $$file)$(RESET)"; exit 1; }; \
+			echo "$(GREEN)✅ 完了: $$(basename $$file)$(RESET)"; \
+		fi \
+	done
+	@echo "$(GREEN)✅ 全シードデータ投入完了$(RESET)"
+
+.PHONY: docker-setup-dev
+docker-setup-dev: ## 🏗️ 開発環境セットアップ（マイグレーション + シード）
+	@echo "$(CYAN)🏗️ 開発環境セットアップ開始...$(RESET)"
+	@$(MAKE) docker-migrate-sql
+	@$(MAKE) docker-seed
+	@echo "$(GREEN)✅ 開発環境セットアップ完了$(RESET)"
+
+.PHONY: docker-migrate-reset
+docker-migrate-reset: ## 🔄 Dockerマイグレーションリセット
+	@echo "$(YELLOW)🔄 Dockerマイグレーションリセット中...$(RESET)"
+	@docker exec erp-postgres psql -U erp_user -d erp_access_control -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>/dev/null || echo "$(YELLOW)⚠️  スキーマリセット失敗（初回実行の可能性）$(RESET)"
+	@$(MAKE) docker-migrate-sql
+	@echo "$(GREEN)✅ Dockerマイグレーションリセット完了$(RESET)"
 
 .PHONY: docker-test
 docker-test: ## 🧪 Dockerテスト環境起動

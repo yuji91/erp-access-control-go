@@ -1,0 +1,286 @@
+{
+  "info": {
+    "name": "ERP Access Control API - Multi Role Testing",
+    "description": "複数ロール対応の認証・認可API テストコレクション",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "02. Version Info",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/version",
+          "host": ["{{base_url}}"],
+          "path": ["version"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "03. Root Endpoint",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/",
+          "host": ["{{base_url}}"],
+          "path": [""]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login - Test User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const response = pm.response.json();",
+                  "  pm.collectionVariables.set('auth_token', response.token);",
+                  "  console.log('Token saved:', response.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Role Management",
+      "item": [
+        {
+          "name": "Assign Role to User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000002\",\n  \"role_id\": \"00000000-0000-0000-0000-000000000002\",\n  \"priority\": 2,\n  \"valid_from\": \"2024-01-01T00:00:00Z\",\n  \"valid_to\": \"2024-12-31T23:59:59Z\",\n  \"reason\": \"期限付きプロジェクトマネージャー権限\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/roles",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "roles"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/00000000-0000-0000-0000-000000000002/roles?active=true",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "00000000-0000-0000-0000-000000000002", "roles"],
+              "query": [
+                {
+                  "key": "active",
+                  "value": "true"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Role Priority",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priority\": 5,\n  \"reason\": \"権限優先度を最高レベルに変更\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/00000000-0000-0000-0000-000000000002/roles/00000000-0000-0000-0000-000000000002",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "00000000-0000-0000-0000-000000000002", "roles", "00000000-0000-0000-0000-000000000002"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Role",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"プロジェクト終了により権限取り消し\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/00000000-0000-0000-0000-000000000002/roles/00000000-0000-0000-0000-000000000002",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "00000000-0000-0000-0000-000000000002", "roles", "00000000-0000-0000-0000-000000000002"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Permission Testing",
+      "item": [
+        {
+          "name": "Check User Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/00000000-0000-0000-0000-000000000002/permissions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "00000000-0000-0000-0000-000000000002", "permissions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Test Protected Endpoint",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/protected/admin-only",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "protected", "admin-only"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+} 
