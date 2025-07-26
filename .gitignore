@@ -1,0 +1,216 @@
+# =============================================================================
+# ERP Access Control API (.gitignore)
+# Go + OpenAPI + Docker プロジェクト用
+# =============================================================================
+
+# Go関連
+# -----------------------------------------------------------------------------
+# バイナリファイル
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+go.pkg
+
+# テスト関連
+*.test
+*.out
+coverage.txt
+coverage.html
+*.cover
+
+# Go modules
+# go.mod, go.sum は管理対象（コメントアウト）
+# go.mod
+# go.sum
+
+# Vendor（Go modules使用時は通常不要）
+vendor/
+
+# Go workspace（Go 1.18+）
+go.work
+go.work.sum
+
+# OpenAPI・コード生成関連
+# -----------------------------------------------------------------------------
+# 生成されたクライアントコード
+generated/
+gen/
+*-client/
+*-server/
+
+# Swagger UI 静的ファイル（手動配置の場合）
+swagger-ui/
+redoc-static/
+
+# OpenAPI Generator一時ファイル
+.openapi-generator/
+.openapi-generator-ignore
+
+# IDE・エディタ関連
+# -----------------------------------------------------------------------------
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (GoLand, IntelliJ)
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# OS関連
+# -----------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# 設定・環境関連
+# -----------------------------------------------------------------------------
+# 環境変数ファイル
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# 設定ファイル（ローカル環境用）
+config.local.*
+config.development.*
+config.test.*
+*-local.yaml
+*-local.yml
+*-local.json
+
+# 認証・秘密情報
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+private/
+
+# ログファイル
+# -----------------------------------------------------------------------------
+*.log
+logs/
+log/
+*.log.*
+
+# 開発・ビルド関連
+# -----------------------------------------------------------------------------
+# バイナリ出力
+bin/
+build/
+dist/
+out/
+
+# 一時ファイル
+tmp/
+temp/
+.tmp/
+*.tmp
+
+# キャッシュ
+.cache/
+*.cache
+
+# データベース関連
+# -----------------------------------------------------------------------------
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# PostgreSQL dump
+*.sql.gz
+*.dump
+
+# テストデータ
+testdata/local/
+fixtures/local/
+
+# Docker関連
+# -----------------------------------------------------------------------------
+# Dockerfile.local など
+Dockerfile.local
+docker-compose.local.yml
+docker-compose.override.yml
+
+# Node.js関連（OpenAPIツールで使用）
+# -----------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn/
+
+# プロジェクト固有
+# -----------------------------------------------------------------------------
+# 生成されたHTMLドキュメント（再生成可能）
+docs/api.html
+
+# パフォーマンステスト結果
+benchmark_results/
+load_test_results/
+
+# カバレッジレポート
+coverage/
+
+# プロファイリング
+*.prof
+*.pprof
+
+# バックアップファイル
+*.bak
+*.backup
+*~
+
+# =============================================================================
+# 保持すべきファイル（参考）
+# =============================================================================
+# README.md
+# go.mod, go.sum
+# api/openapi.yaml
+# openapitools.json（OpenAPI Generator設定）
+# docs/design/
+# models/
+# migrations/
+# cmd/
+# internal/
+# pkg/ 

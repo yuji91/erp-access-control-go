@@ -1,0 +1,137 @@
+openapi: 3.0.3
+info:
+  title: ERP Access Control API
+  version: 1.0.0
+  description: Basic access control APIs for ERP system (Permission Matrix + Policy Hybrid)
+servers:
+  - url: http://localhost:8080/api/v1
+paths:
+  /me/permissions:
+    get:
+      summary: Get current user's permissions for a module
+      parameters:
+        - in: query
+          name: module
+          schema:
+            type: string
+          required: true
+          description: Target module name (e.g. "inventory")
+      responses:
+        '200':
+          description: List of allowed actions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module:
+                    type: string
+                  actions:
+                    type: array
+                    items:
+                      type: string
+              example:
+                module: inventory
+                actions: [view_inventory, update_inventory]
+  /resources/{type}/{id}/actions/{action}:
+    post:
+      summary: Try to perform an action on a specific resource
+      parameters:
+        - in: path
+          name: type
+          schema:
+            type: string
+          required: true
+          description: Resource type (e.g. "customer", "order")
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+        - in: path
+          name: action
+          schema:
+            type: string
+          required: true
+      requestBody:
+        description: Additional attributes for policy evaluation
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+            example:
+              status: "PENDING"
+              department: "sales"
+      responses:
+        '200':
+          description: Access allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessDecision'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessDecision'
+  /audit-logs:
+    get:
+      summary: Get audit logs
+      parameters:
+        - in: query
+          name: user_id
+          schema:
+            type: string
+        - in: query
+          name: action
+          schema:
+            type: string
+        - in: query
+          name: resource_type
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+components:
+  schemas:
+    AccessDecision:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        reasonCode:
+          type: string
+        explanation:
+          type: string
+      example:
+        allowed: false
+        reasonCode: "NO_MATRIX_PERMISSION"
+        explanation: "ロールに操作権限がありません"
+    AuditLog:
+      type: object
+      properties:
+        user_id:
+          type: string
+        action:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        result:
+          type: string
+        reason:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
