@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config holds all configuration for the application
+// Config アプリケーション全体の設定
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
 	Database DatabaseConfig `mapstructure:"database"`
@@ -15,14 +15,14 @@ type Config struct {
 	Logger   LoggerConfig   `mapstructure:"logger"`
 }
 
-// ServerConfig holds server configuration
+// ServerConfig サーバー設定
 type ServerConfig struct {
 	Host string `mapstructure:"host"`
 	Port string `mapstructure:"port"`
 	Mode string `mapstructure:"mode"`
 }
 
-// DatabaseConfig holds database configuration
+// DatabaseConfig データベース設定
 type DatabaseConfig struct {
 	Host     string `mapstructure:"host"`
 	Port     int    `mapstructure:"port"`
@@ -32,7 +32,7 @@ type DatabaseConfig struct {
 	SSLMode  string `mapstructure:"ssl_mode"`
 }
 
-// JWTConfig holds JWT authentication configuration
+// JWTConfig JWT認証設定
 type JWTConfig struct {
 	Secret    string        `mapstructure:"secret"`
 	ExpiresIn time.Duration `mapstructure:"expires_in"`
@@ -43,13 +43,13 @@ type JWTConfig struct {
 	// - JWTアルゴリズムの明示的指定 (RS256推奨)
 }
 
-// LoggerConfig holds logger configuration
+// LoggerConfig ログ設定
 type LoggerConfig struct {
 	Level  string `mapstructure:"level"`
 	Format string `mapstructure:"format"`
 }
 
-// Load loads configuration from environment and config files
+// Load 環境変数と設定ファイルから設定を読み込む
 func Load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -81,7 +81,7 @@ func Load() (*Config, error) {
 	return &config, nil
 }
 
-// setDefaults sets default configuration values
+// setDefaults デフォルト設定値を設定
 func setDefaults() {
 	// Server defaults
 	viper.SetDefault("server.host", "localhost")
@@ -107,7 +107,7 @@ func setDefaults() {
 	viper.SetDefault("logger.format", "json")
 }
 
-// bindEnvVariables binds environment variables to configuration keys
+// bindEnvVariables 環境変数を設定キーにバインド
 func bindEnvVariables() {
 	// Server
 	viper.BindEnv("server.host", "SERVER_HOST")
@@ -132,7 +132,7 @@ func bindEnvVariables() {
 	viper.BindEnv("logger.format", "LOG_FORMAT")
 }
 
-// GetDatabaseURL returns the database connection URL
+// GetDatabaseURL データベース接続URLを取得
 func (c *Config) GetDatabaseURL() string {
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		c.Database.Host,
@@ -144,7 +144,7 @@ func (c *Config) GetDatabaseURL() string {
 	)
 }
 
-// GetServerAddress returns the server address
+// GetServerAddress サーバーアドレスを取得
 func (c *Config) GetServerAddress() string {
 	return c.Server.Host + ":" + c.Server.Port
 }

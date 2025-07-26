@@ -13,7 +13,7 @@ import (
 	"erp-access-control-go/pkg/jwt"
 )
 
-// AuthService provides authentication and authorization services
+// AuthService 認証・認可サービス
 type AuthService struct {
 	db                *gorm.DB
 	jwtService        *jwt.Service
@@ -21,7 +21,7 @@ type AuthService struct {
 	revocationService *TokenRevocationService
 }
 
-// NewAuthService creates a new authentication service
+// NewAuthService 新しい認証サービスを作成
 func NewAuthService(
 	db *gorm.DB,
 	jwtService *jwt.Service,
@@ -36,13 +36,13 @@ func NewAuthService(
 	}
 }
 
-// LoginRequest represents login request data
+// LoginRequest ログインリクエストデータ
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
 }
 
-// LoginResponse represents login response data
+// LoginResponse ログインレスポンスデータ
 type LoginResponse struct {
 	Token       string        `json:"token"`
 	ExpiresIn   time.Duration `json:"expires_in"`
@@ -50,7 +50,7 @@ type LoginResponse struct {
 	Permissions []string      `json:"permissions"`
 }
 
-// UserInfo represents user information in responses
+// UserInfo レスポンス用ユーザー情報
 type UserInfo struct {
 	ID         uuid.UUID `json:"id"`
 	Name       string    `json:"name"`
@@ -60,17 +60,19 @@ type UserInfo struct {
 	Department DeptInfo  `json:"department"`
 }
 
+// RoleInfo ロール情報
 type RoleInfo struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
 }
 
+// DeptInfo 部門情報
 type DeptInfo struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
 }
 
-// Login authenticates a user and returns JWT token
+// Login ユーザー認証を行いJWTトークンを返す
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	// TODO: セキュリティ強化
 	// - レート制限 (IP/ユーザー別ログイン試行回数制限)
@@ -135,17 +137,17 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	}, nil
 }
 
-// Logout revokes the current JWT token
+// Logout 現在のJWTトークンを無効化
 func (s *AuthService) Logout(jti string, userID uuid.UUID) error {
 	return s.revocationService.RevokeToken(jti, userID, "user_logout")
 }
 
-// LogoutAllSessions revokes all tokens for a user
+// LogoutAllSessions ユーザーの全てのトークンを無効化
 func (s *AuthService) LogoutAllSessions(userID uuid.UUID) error {
 	return s.revocationService.RevokeAllUserTokens(userID, "logout_all_sessions")
 }
 
-// RefreshToken generates a new token from an existing valid token
+// RefreshToken 既存の有効なトークンから新しいトークンを生成
 func (s *AuthService) RefreshToken(currentToken string) (*LoginResponse, error) {
 	// Validate current token
 	claims, err := s.jwtService.ValidateToken(currentToken)
@@ -211,7 +213,7 @@ func (s *AuthService) RefreshToken(currentToken string) (*LoginResponse, error) 
 	}, nil
 }
 
-// ChangePassword changes user password
+// ChangePassword ユーザーパスワードを変更
 func (s *AuthService) ChangePassword(userID uuid.UUID, currentPassword, newPassword string) error {
 	// TODO: パスワードポリシー強化
 	// - 最小長度 (8文字以上)
@@ -252,17 +254,17 @@ func (s *AuthService) ChangePassword(userID uuid.UUID, currentPassword, newPassw
 	return s.revocationService.RevokeAllUserTokens(userID, "password_change")
 }
 
-// ValidatePermission checks if user has required permission
+// ValidatePermission ユーザーが必要な権限を持っているかチェック
 func (s *AuthService) ValidatePermission(userID uuid.UUID, permission string) (bool, error) {
 	return s.permissionService.CheckPermission(userID, permission)
 }
 
-// ValidatePermissionWithScope checks permission with scope conditions
+// ValidatePermissionWithScope スコープ条件付きで権限をチェック
 func (s *AuthService) ValidatePermissionWithScope(userID uuid.UUID, permission string, scope map[string]interface{}) (bool, error) {
 	return s.permissionService.CheckPermissionWithScope(userID, permission, scope)
 }
 
-// GetUserProfile returns user profile information
+// GetUserProfile ユーザープロファイル情報を取得
 func (s *AuthService) GetUserProfile(userID uuid.UUID) (*UserInfo, error) {
 	var user models.User
 	if err := s.db.Preload("Role").Preload("Department").

@@ -10,17 +10,17 @@ import (
 	"erp-access-control-go/pkg/errors"
 )
 
-// TokenRevocationService handles JWT token revocation
+// TokenRevocationService JWTトークン無効化サービス
 type TokenRevocationService struct {
 	db *gorm.DB
 }
 
-// NewTokenRevocationService creates a new token revocation service
+// NewTokenRevocationService 新しいトークン無効化サービスを作成
 func NewTokenRevocationService(db *gorm.DB) *TokenRevocationService {
 	return &TokenRevocationService{db: db}
 }
 
-// RevokeToken revokes a JWT token by storing its JTI in the revoked_tokens table
+// RevokeToken JTIをrevoked_tokensテーブルに保存してJWTトークンを無効化
 func (s *TokenRevocationService) RevokeToken(jti string, userID uuid.UUID, reason string) error {
 	revokedToken := models.RevokedToken{
 		TokenJTI:  jti,
@@ -36,7 +36,7 @@ func (s *TokenRevocationService) RevokeToken(jti string, userID uuid.UUID, reaso
 	return nil
 }
 
-// IsTokenRevoked checks if a token (by JTI) has been revoked
+// IsTokenRevoked トークン（JTI）が無効化されているかチェック
 func (s *TokenRevocationService) IsTokenRevoked(jti string) (bool, error) {
 	var count int64
 	if err := s.db.Model(&models.RevokedToken{}).Where("token_jti = ?", jti).Count(&count).Error; err != nil {
@@ -46,7 +46,7 @@ func (s *TokenRevocationService) IsTokenRevoked(jti string) (bool, error) {
 	return count > 0, nil
 }
 
-// RevokeAllUserTokens revokes all tokens for a specific user
+// RevokeAllUserTokens 特定ユーザーの全トークンを無効化
 func (s *TokenRevocationService) RevokeAllUserTokens(userID uuid.UUID, reason string) error {
 	// Get all active sessions/tokens for the user
 	// Since we can't get all JTIs from active tokens, we'll use a different approach
@@ -66,7 +66,7 @@ func (s *TokenRevocationService) RevokeAllUserTokens(userID uuid.UUID, reason st
 	return nil
 }
 
-// IsUserTokensRevoked checks if all tokens for a user were revoked after a certain time
+// IsUserTokensRevoked ユーザーの全トークンが特定時刻以降に無効化されたかチェック
 func (s *TokenRevocationService) IsUserTokensRevoked(userID uuid.UUID, issuedAt time.Time) (bool, error) {
 	var revokedToken models.RevokedToken
 	err := s.db.Where("user_id = ? AND token_jti = ? AND revoked_at > ?", userID, "*", issuedAt).
@@ -82,7 +82,7 @@ func (s *TokenRevocationService) IsUserTokensRevoked(userID uuid.UUID, issuedAt 
 	return true, nil
 }
 
-// CleanupExpiredTokens removes expired revoked tokens from the database
+// CleanupExpiredTokens 期限切れの無効化トークンをデータベースから削除
 func (s *TokenRevocationService) CleanupExpiredTokens(olderThan time.Duration) error {
 	// TODO: パフォーマンス最適化
 	// - バッチ削除処理 (一度に大量削除ではなく分割実行)
@@ -99,7 +99,7 @@ func (s *TokenRevocationService) CleanupExpiredTokens(olderThan time.Duration) e
 	return nil
 }
 
-// GetRevokedTokens retrieves paginated list of revoked tokens
+// GetRevokedTokens ページネーション付きで無効化トークンリストを取得
 func (s *TokenRevocationService) GetRevokedTokens(page, limit int) ([]models.RevokedToken, int64, error) {
 	var tokens []models.RevokedToken
 	var total int64
@@ -122,7 +122,7 @@ func (s *TokenRevocationService) GetRevokedTokens(page, limit int) ([]models.Rev
 	return tokens, total, nil
 }
 
-// GetUserRevokedTokens retrieves revoked tokens for a specific user
+// GetUserRevokedTokens 特定ユーザーの無効化トークンを取得
 func (s *TokenRevocationService) GetUserRevokedTokens(userID uuid.UUID, page, limit int) ([]models.RevokedToken, int64, error) {
 	var tokens []models.RevokedToken
 	var total int64
@@ -145,7 +145,7 @@ func (s *TokenRevocationService) GetUserRevokedTokens(userID uuid.UUID, page, li
 	return tokens, total, nil
 }
 
-// ValidateTokenStatus performs comprehensive token validation
+// ValidateTokenStatus 包括的なトークン状態検証を実行
 func (s *TokenRevocationService) ValidateTokenStatus(jti string, userID uuid.UUID, issuedAt time.Time) error {
 	// Check if specific token is revoked
 	isRevoked, err := s.IsTokenRevoked(jti)

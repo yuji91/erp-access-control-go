@@ -12,13 +12,13 @@ import (
 	"erp-access-control-go/pkg/jwt"
 )
 
-// AuthMiddleware provides JWT authentication middleware
+// AuthMiddleware JWT認証ミドルウェア
 type AuthMiddleware struct {
 	jwtService        *jwt.Service
 	revocationService *services.TokenRevocationService
 }
 
-// NewAuthMiddleware creates a new authentication middleware
+// NewAuthMiddleware 新しい認証ミドルウェアを作成
 func NewAuthMiddleware(jwtService *jwt.Service, revocationService *services.TokenRevocationService) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtService:        jwtService,
@@ -26,7 +26,7 @@ func NewAuthMiddleware(jwtService *jwt.Service, revocationService *services.Toke
 	}
 }
 
-// Authentication verifies JWT token and sets user context
+// Authentication JWTトークンを検証してユーザーコンテキストを設定
 func (m *AuthMiddleware) Authentication() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// TODO: セキュリティ強化
@@ -74,7 +74,7 @@ func (m *AuthMiddleware) Authentication() gin.HandlerFunc {
 	}
 }
 
-// RequirePermissions checks if user has required permissions
+// RequirePermissions ユーザーが必要な権限を持っているかチェック
 func RequirePermissions(permissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userPerms, exists := c.Get("permissions")
@@ -103,7 +103,7 @@ func RequirePermissions(permissions ...string) gin.HandlerFunc {
 	}
 }
 
-// RequireAnyPermission checks if user has any of the required permissions
+// RequireAnyPermission ユーザーが必要な権限のいずれかを持っているかチェック
 func RequireAnyPermission(permissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userPerms, exists := c.Get("permissions")
@@ -132,7 +132,7 @@ func RequireAnyPermission(permissions ...string) gin.HandlerFunc {
 	}
 }
 
-// RequireOwnership checks if user is the owner of the resource
+// RequireOwnership ユーザーがリソースの所有者かチェック
 func RequireOwnership() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, exists := c.Get("user_id")
@@ -175,7 +175,7 @@ func RequireOwnership() gin.HandlerFunc {
 	}
 }
 
-// GetCurrentUserID extracts the current user ID from context
+// GetCurrentUserID コンテキストから現在のユーザーIDを取得
 func GetCurrentUserID(c *gin.Context) (uuid.UUID, error) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -190,7 +190,7 @@ func GetCurrentUserID(c *gin.Context) (uuid.UUID, error) {
 	return currentUserID, nil
 }
 
-// GetCurrentUserEmail extracts the current user email from context
+// GetCurrentUserEmail コンテキストから現在のユーザーメールアドレスを取得
 func GetCurrentUserEmail(c *gin.Context) (string, error) {
 	email, exists := c.Get("email")
 	if !exists {
@@ -205,7 +205,7 @@ func GetCurrentUserEmail(c *gin.Context) (string, error) {
 	return userEmail, nil
 }
 
-// GetCurrentUserPermissions extracts the current user permissions from context
+// GetCurrentUserPermissions コンテキストから現在のユーザー権限を取得
 func GetCurrentUserPermissions(c *gin.Context) ([]string, error) {
 	perms, exists := c.Get("permissions")
 	if !exists {
@@ -220,7 +220,7 @@ func GetCurrentUserPermissions(c *gin.Context) ([]string, error) {
 	return permissions, nil
 }
 
-// hasPermission checks if a permission exists in user's permissions
+// hasPermission ユーザーの権限リストに指定された権限が存在するかチェック
 func hasPermission(userPermissions []string, requiredPermission string) bool {
 	for _, perm := range userPermissions {
 		if perm == requiredPermission || perm == "*" {

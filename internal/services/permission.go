@@ -11,17 +11,17 @@ import (
 	"erp-access-control-go/models"
 )
 
-// PermissionService handles permission evaluation and management
+// PermissionService 権限評価・管理サービス
 type PermissionService struct {
 	db *gorm.DB
 }
 
-// NewPermissionService creates a new permission service
+// NewPermissionService 新しい権限サービスを作成
 func NewPermissionService(db *gorm.DB) *PermissionService {
 	return &PermissionService{db: db}
 }
 
-// Module represents system modules
+// Module システムモジュールを表す
 type Module string
 
 const (
@@ -33,7 +33,7 @@ const (
 	ModuleSystem     Module = "system"
 )
 
-// Action represents possible actions
+// Action 実行可能なアクションを表す
 type Action string
 
 const (
@@ -45,15 +45,15 @@ const (
 	ActionManage Action = "manage"
 )
 
-// Permission represents a permission string
+// Permission 権限文字列を表す
 type Permission string
 
-// Standard permission format: module:action (e.g., "user:create", "role:read")
+// NewPermission 標準的な権限フォーマット: module:action (例: "user:create", "role:read")
 func NewPermission(module Module, action Action) Permission {
 	return Permission(fmt.Sprintf("%s:%s", module, action))
 }
 
-// PermissionMatrix defines the permission matrix for the system
+// PermissionMatrix システムの権限マトリックスを定義
 // TODO: アーキテクチャ改善
 // - データベースベース権限管理への移行検討
 // - 動的権限追加・削除機能
@@ -120,7 +120,7 @@ var PermissionMatrix = map[string][]Permission{
 	},
 }
 
-// GetUserPermissions retrieves all permissions for a user
+// GetUserPermissions ユーザーの全権限を取得
 func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, error) {
 	// TODO: パフォーマンス最適化
 	// - Redis/Memcachedによる権限キャッシュ (TTL: 5-15分)
@@ -156,7 +156,7 @@ func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, erro
 	return permissions, nil
 }
 
-// CheckPermission checks if user has a specific permission
+// CheckPermission ユーザーが特定の権限を持っているかチェック
 func (s *PermissionService) CheckPermission(userID uuid.UUID, requiredPermission string) (bool, error) {
 	// TODO: 監査ログ強化
 	// - 権限チェックの詳細ログ (成功/失敗、リソース、時刻)
@@ -177,7 +177,7 @@ func (s *PermissionService) CheckPermission(userID uuid.UUID, requiredPermission
 	return hasPermission, nil
 }
 
-// CheckPermissionWithScope checks permission with scope conditions
+// CheckPermissionWithScope スコープ条件付きで権限をチェック
 func (s *PermissionService) CheckPermissionWithScope(userID uuid.UUID, requiredPermission string, resourceScope map[string]interface{}) (bool, error) {
 	// First check basic permission
 	hasBasicPerm, err := s.CheckPermission(userID, requiredPermission)
@@ -214,7 +214,7 @@ func (s *PermissionService) CheckPermissionWithScope(userID uuid.UUID, requiredP
 	return false, nil
 }
 
-// evaluateScope evaluates JSONB scope conditions against resource scope
+// evaluateScope JSONBスコープ条件をリソーススコープと照合評価
 func (s *PermissionService) evaluateScope(scopeValue json.RawMessage, resourceScope map[string]interface{}) bool {
 	var conditions map[string]interface{}
 	if err := json.Unmarshal(scopeValue, &conditions); err != nil {
@@ -235,7 +235,7 @@ func (s *PermissionService) evaluateScope(scopeValue json.RawMessage, resourceSc
 	return true
 }
 
-// compareValues compares scope values with support for arrays and wildcards
+// compareValues 配列とワイルドカードをサポートしてスコープ値を比較
 func (s *PermissionService) compareValues(expected, actual interface{}) bool {
 	switch exp := expected.(type) {
 	case string:
@@ -272,7 +272,7 @@ func (s *PermissionService) compareValues(expected, actual interface{}) bool {
 	return false
 }
 
-// hasPermission checks if permission exists in user's permissions with wildcard support
+// hasPermission ワイルドカードサポート付きでユーザー権限に指定権限が存在するかチェック
 func (s *PermissionService) hasPermission(userPermissions []string, requiredPermission string) bool {
 	for _, perm := range userPermissions {
 		if perm == "*" || perm == "*:*" {
@@ -288,7 +288,7 @@ func (s *PermissionService) hasPermission(userPermissions []string, requiredPerm
 	return false
 }
 
-// matchesWildcard checks if permission matches wildcard pattern
+// matchesWildcard 権限がワイルドカードパターンにマッチするかチェック
 func (s *PermissionService) matchesWildcard(pattern, permission string) bool {
 	// Handle module:* patterns (e.g., "user:*" matches "user:read")
 	if strings.HasSuffix(pattern, ":*") {
@@ -305,7 +305,7 @@ func (s *PermissionService) matchesWildcard(pattern, permission string) bool {
 	return false
 }
 
-// GetRolePermissions returns permissions for a specific role
+// GetRolePermissions 特定のロールの権限を取得
 func (s *PermissionService) GetRolePermissions(roleName string) []Permission {
 	if perms, exists := PermissionMatrix[roleName]; exists {
 		return perms
@@ -313,7 +313,7 @@ func (s *PermissionService) GetRolePermissions(roleName string) []Permission {
 	return []Permission{}
 }
 
-// ValidatePermission validates if a permission string is valid
+// ValidatePermission 権限文字列が有効かバリデーション
 func (s *PermissionService) ValidatePermission(permission string) bool {
 	if permission == "*" || permission == "*:*" {
 		return true
@@ -328,7 +328,7 @@ func (s *PermissionService) ValidatePermission(permission string) bool {
 	return s.isValidModule(module) && s.isValidAction(action)
 }
 
-// isValidModule checks if module is valid
+// isValidModule モジュールが有効かチェック
 func (s *PermissionService) isValidModule(module string) bool {
 	if module == "*" {
 		return true
@@ -350,7 +350,7 @@ func (s *PermissionService) isValidModule(module string) bool {
 	return false
 }
 
-// isValidAction checks if action is valid
+// isValidAction アクションが有効かチェック
 func (s *PermissionService) isValidAction(action string) bool {
 	if action == "*" {
 		return true
