@@ -296,7 +296,7 @@ func GetCurrentUserPermissions(c *gin.Context) ([]string, error) {
 // hasPermission ユーザーの権限リストに指定された権限が存在するかチェック
 func hasPermission(userPermissions []string, requiredPermission string) bool {
 	for _, perm := range userPermissions {
-		if perm == requiredPermission || perm == "*" {
+		if perm == requiredPermission || perm == "*" || perm == "*:*" {
 			return true
 		}
 	}
