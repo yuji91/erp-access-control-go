@@ -63,6 +63,8 @@ help: ## 📋 利用可能なコマンド一覧を表示
 	@echo ""
 	@echo "$(YELLOW)🎯 ポートフォリオ評価者向け推奨コマンド:$(RESET)"
 	@echo "  $(GREEN)make setup-dev-clean$(RESET)     完全クリーンアップ後の環境構築（推奨）"
+	@echo "  $(GREEN)make demo$(RESET)                権限管理システム全機能デモ実行"
+	@echo "  $(GREEN)make demo-quick$(RESET)          システム動作簡易確認"
 	@echo "  $(GREEN)make test-api$(RESET)            API動作確認テスト"
 	@echo "  $(GREEN)make env-check$(RESET)           環境設定確認"
 	@echo "  $(GREEN)make docker-clean-safe$(RESET)   ERPプロジェクトのみクリーンアップ（安全）"
@@ -76,11 +78,14 @@ help: ## 📋 利用可能なコマンド一覧を表示
 	@echo "$(YELLOW)🌐 OpenAPI:$(RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '^(api-|swagger-):' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(MAGENTA)%-20s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
+	@echo "$(YELLOW)🎯 デモンストレーション:$(RESET)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '^(demo):' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-20s$(RESET) %s\n", $$1, $$2}'
+	@echo ""
 	@echo "$(YELLOW)🧪 テスト・品質:$(RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '^(test|lint|fmt|coverage):' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(RED)%-20s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(YELLOW)🚀 デプロイ・その他:$(RESET)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -vE '^(setup|build|run|test|clean|db-|migrate|api-|swagger-|test|lint|fmt|coverage):' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(WHITE)%-20s$(RESET) %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -vE '^(setup|build|run|test|clean|db-|migrate|api-|swagger-|test|lint|fmt|coverage|demo):' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(WHITE)%-20s$(RESET) %s\n", $$1, $$2}'
 
 # -----------------------------------------------------------------------------
 # 基本コマンド
@@ -321,6 +326,44 @@ api-client-go: ## 🔧 Goクライアント生成
 	@echo "$(BLUE)🔧 Goクライアント生成中...$(RESET)"
 	@openapi-generator-cli generate -i api/openapi.yaml -g go -o $(GENERATED_DIR)/go-client
 	@echo "$(GREEN)✅ Goクライアント生成完了: $(GENERATED_DIR)/go-client$(RESET)"
+
+# -----------------------------------------------------------------------------
+# デモンストレーション
+# -----------------------------------------------------------------------------
+.PHONY: demo
+demo: ## 🎯 権限管理システムデモ実行（全API機能紹介）
+	@echo "$(CYAN)🎯 ERP Access Control API 権限管理システムデモ開始...$(RESET)"
+	@echo "$(YELLOW)📋 前提条件チェック:$(RESET)"
+	@if ! curl -s http://localhost:8080/health >/dev/null 2>&1; then \
+		echo "$(RED)❌ サーバーが起動していません$(RESET)"; \
+		echo "$(YELLOW)💡 サーバーを起動してからデモを実行してください:$(RESET)"; \
+		echo "  make run-docker-env  # Docker環境用"; \
+		echo "  make run            # ローカル環境用"; \
+		exit 1; \
+	else \
+		echo "$(GREEN)✅ サーバーが起動中です$(RESET)"; \
+	fi
+	@echo ""
+	@./scripts/demo-permission-system.sh
+
+.PHONY: demo-help
+demo-help: ## 📖 デモスクリプトのヘルプ表示
+	@echo "$(CYAN)📖 ERP Access Control API デモスクリプト ヘルプ$(RESET)"
+	@./scripts/demo-permission-system.sh --help
+
+.PHONY: demo-quick
+demo-quick: ## ⚡ 権限管理システム簡易デモ（確認用）
+	@echo "$(BLUE)⚡ 権限管理システム簡易デモ開始...$(RESET)"
+	@echo "$(YELLOW)🔍 サーバーヘルスチェック:$(RESET)"
+	@curl -s -w "\nHTTP Status: %{http_code}\n" http://localhost:8080/health | jq '.' 2>/dev/null || curl -s -w "\nHTTP Status: %{http_code}\n" http://localhost:8080/health
+	@echo ""
+	@echo "$(YELLOW)🔐 管理者ログインテスト:$(RESET)"
+	@curl -s -X POST http://localhost:8080/api/v1/auth/login \
+		-H "Content-Type: application/json" \
+		-d '{"email": "admin@example.com", "password": "admin123"}' | \
+		jq '.data.access_token // .access_token // "ログイン失敗"' 2>/dev/null || echo "ログイン確認エラー"
+	@echo ""
+	@echo "$(GREEN)✅ 簡易デモ完了（詳細デモは 'make demo' で実行）$(RESET)"
 
 # -----------------------------------------------------------------------------
 # テスト・品質管理
