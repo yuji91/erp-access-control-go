@@ -7,7 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- 基本テーブル定義
 -- =============================================================================
 
-CREATE TABLE departments (
+CREATE TABLE IF NOT EXISTS departments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   parent_id UUID REFERENCES departments(id) ON DELETE SET NULL,
@@ -15,7 +15,7 @@ CREATE TABLE departments (
   CONSTRAINT chk_departments_no_self_reference CHECK (id != parent_id)
 );
 
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   parent_id UUID REFERENCES roles(id) ON DELETE SET NULL,
@@ -23,19 +23,19 @@ CREATE TABLE roles (
   CONSTRAINT chk_roles_no_self_reference CHECK (id != parent_id)
 );
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
-  role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  primary_role_id UUID REFERENCES roles(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'active',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT chk_users_status CHECK (status IN ('active', 'inactive', 'suspended'))
 );
 
-CREATE TABLE permissions (
+CREATE TABLE IF NOT EXISTS permissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   module TEXT NOT NULL,
   action TEXT NOT NULL,
@@ -43,14 +43,14 @@ CREATE TABLE permissions (
   UNIQUE(module, action)
 );
 
-CREATE TABLE role_permissions (
+CREATE TABLE IF NOT EXISTS role_permissions (
   role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
   permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (role_id, permission_id)
 );
 
-CREATE TABLE user_scopes (
+CREATE TABLE IF NOT EXISTS user_scopes (
   id SERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   resource_type TEXT NOT NULL,
@@ -62,7 +62,7 @@ CREATE TABLE user_scopes (
   CONSTRAINT chk_user_scopes_scope_value_structure CHECK (jsonb_typeof(scope_value) = 'object')
 );
 
-CREATE TABLE approval_states (
+CREATE TABLE IF NOT EXISTS approval_states (
   id SERIAL PRIMARY KEY,
   state_name TEXT NOT NULL,
   approver_role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
@@ -73,7 +73,7 @@ CREATE TABLE approval_states (
   CONSTRAINT chk_approval_states_step_order CHECK (step_order > 0)
 );
 
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
   id SERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   action TEXT NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE audit_logs (
 -- =============================================================================
 
 -- 時間ベース制御テーブル
-CREATE TABLE time_restrictions (
+CREATE TABLE IF NOT EXISTS time_restrictions (
   id SERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   resource_type TEXT NOT NULL,
@@ -109,7 +109,7 @@ CREATE TABLE time_restrictions (
 );
 
 -- JWTトークン無効化管理
-CREATE TABLE revoked_tokens (
+CREATE TABLE IF NOT EXISTS revoked_tokens (
   id SERIAL PRIMARY KEY,
   token_jti TEXT NOT NULL UNIQUE, -- JWT ID
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -122,37 +122,37 @@ CREATE TABLE revoked_tokens (
 -- =============================================================================
 
 -- 基本検索用インデックス
-CREATE INDEX idx_users_department_role ON users(department_id, role_id);
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_status ON users(status) WHERE status != 'active';
+CREATE INDEX IF NOT EXISTS idx_users_department_primary_role ON users(department_id, primary_role_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status) WHERE status != 'active';
 
 -- スコープ検索用インデックス
-CREATE INDEX idx_user_scopes_user_resource ON user_scopes(user_id, resource_type);
-CREATE INDEX idx_user_scopes_resource_type ON user_scopes(resource_type);
-CREATE INDEX idx_user_scopes_scope_value ON user_scopes USING GIN(scope_value);
+CREATE INDEX IF NOT EXISTS idx_user_scopes_user_resource ON user_scopes(user_id, resource_type);
+CREATE INDEX IF NOT EXISTS idx_user_scopes_resource_type ON user_scopes(resource_type);
+CREATE INDEX IF NOT EXISTS idx_user_scopes_scope_value ON user_scopes USING GIN(scope_value);
 
 -- 承認フロー検索用インデックス
-CREATE INDEX idx_approval_states_role_step ON approval_states(approver_role_id, step_order);
-CREATE INDEX idx_approval_states_resource ON approval_states(resource_type);
-CREATE INDEX idx_approval_states_scope ON approval_states USING GIN(scope);
+CREATE INDEX IF NOT EXISTS idx_approval_states_role_step ON approval_states(approver_role_id, step_order);
+CREATE INDEX IF NOT EXISTS idx_approval_states_resource ON approval_states(resource_type);
+CREATE INDEX IF NOT EXISTS idx_approval_states_scope ON approval_states USING GIN(scope);
 
 -- 監査ログ検索用インデックス
-CREATE INDEX idx_audit_logs_user_timestamp ON audit_logs(user_id, timestamp DESC);
-CREATE INDEX idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
-CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
-CREATE INDEX idx_audit_logs_result ON audit_logs(result);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_timestamp ON audit_logs(user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_result ON audit_logs(result);
 
 -- 権限検索用インデックス
-CREATE INDEX idx_role_permissions_role ON role_permissions(role_id);
-CREATE INDEX idx_role_permissions_permission ON role_permissions(permission_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_permission ON role_permissions(permission_id);
 
 -- 時間制限検索用インデックス
-CREATE INDEX idx_time_restrictions_user_resource ON time_restrictions(user_id, resource_type);
+CREATE INDEX IF NOT EXISTS idx_time_restrictions_user_resource ON time_restrictions(user_id, resource_type);
 
 -- トークン管理用インデックス
-CREATE INDEX idx_revoked_tokens_jti ON revoked_tokens(token_jti);
-CREATE INDEX idx_revoked_tokens_expires ON revoked_tokens(expires_at);
-CREATE INDEX idx_revoked_tokens_user ON revoked_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_revoked_tokens_jti ON revoked_tokens(token_jti);
+CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires ON revoked_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_revoked_tokens_user ON revoked_tokens(user_id);
 
 -- =============================================================================
 -- ビュー作成（階層構造最適化）
@@ -184,7 +184,7 @@ WITH RECURSIVE role_tree AS (
 )
 SELECT * FROM role_tree;
 
--- ユーザー権限統合ビュー
+-- ユーザー権限統合ビュー（複数ロール対応）
 CREATE OR REPLACE VIEW user_permissions_view AS
 SELECT 
   u.id as user_id,
@@ -197,16 +197,20 @@ SELECT
   u.status as user_status
 FROM users u
 JOIN departments d ON u.department_id = d.id
-JOIN roles r ON u.role_id = r.id
+JOIN user_roles ur ON u.id = ur.user_id
+JOIN roles r ON ur.role_id = r.id
 JOIN role_permissions rp ON r.id = rp.role_id
 JOIN permissions p ON rp.permission_id = p.id
-WHERE u.status = 'active';
+WHERE u.status = 'active' 
+  AND ur.is_active = true
+  AND ur.valid_from <= NOW()
+  AND (ur.valid_to IS NULL OR ur.valid_to > NOW());
 
 -- =============================================================================
 -- 関数作成（便利機能）
 -- =============================================================================
 
--- ユーザーの全権限取得関数（階層ロール考慮）
+-- ユーザーの全権限取得関数（複数ロール・階層考慮）
 CREATE OR REPLACE FUNCTION get_user_all_permissions(user_uuid UUID)
 RETURNS TABLE(module TEXT, action TEXT) AS $$
 BEGIN
@@ -214,8 +218,12 @@ BEGIN
   WITH user_role_hierarchy AS (
     SELECT rh.id
     FROM users u
-    JOIN role_hierarchy rh ON (u.role_id = rh.id OR u.role_id = ANY(rh.path))
+    JOIN user_roles ur ON u.id = ur.user_id
+    JOIN role_hierarchy rh ON (ur.role_id = rh.id OR ur.role_id = ANY(rh.path))
     WHERE u.id = user_uuid
+      AND ur.is_active = true
+      AND ur.valid_from <= NOW()
+      AND (ur.valid_to IS NULL OR ur.valid_to > NOW())
   )
   SELECT DISTINCT p.module, p.action
   FROM user_role_hierarchy urh
@@ -251,32 +259,62 @@ $$ LANGUAGE plpgsql;
 -- =============================================================================
 
 -- サンプル部門
-INSERT INTO departments (id, name) VALUES 
-  ('00000000-0000-0000-0000-000000000001', 'ルート部門'),
-  ('00000000-0000-0000-0000-000000000002', '営業部'),
-  ('00000000-0000-0000-0000-000000000003', '経理部'),
-  ('00000000-0000-0000-0000-000000000004', '人事部');
+INSERT INTO departments (id, name)
+SELECT '00000000-0000-0000-0000-000000000001', 'ルート部門'
+WHERE NOT EXISTS (SELECT 1 FROM departments WHERE id = '00000000-0000-0000-0000-000000000001');
+
+INSERT INTO departments (id, name)
+SELECT '00000000-0000-0000-0000-000000000002', '営業部'
+WHERE NOT EXISTS (SELECT 1 FROM departments WHERE id = '00000000-0000-0000-0000-000000000002');
+
+INSERT INTO departments (id, name)
+SELECT '00000000-0000-0000-0000-000000000003', '経理部'
+WHERE NOT EXISTS (SELECT 1 FROM departments WHERE id = '00000000-0000-0000-0000-000000000003');
+
+INSERT INTO departments (id, name)
+SELECT '00000000-0000-0000-0000-000000000004', '人事部'
+WHERE NOT EXISTS (SELECT 1 FROM departments WHERE id = '00000000-0000-0000-0000-000000000004');
 
 -- サンプルロール
-INSERT INTO roles (id, name) VALUES 
-  ('00000000-0000-0000-0000-000000000001', 'admin'),
-  ('00000000-0000-0000-0000-000000000002', 'manager'),
-  ('00000000-0000-0000-0000-000000000003', 'employee');
+INSERT INTO roles (id, name)
+SELECT '00000000-0000-0000-0000-000000000001', 'admin'
+WHERE NOT EXISTS (SELECT 1 FROM roles WHERE id = '00000000-0000-0000-0000-000000000001');
+
+INSERT INTO roles (id, name)
+SELECT '00000000-0000-0000-0000-000000000002', 'manager'
+WHERE NOT EXISTS (SELECT 1 FROM roles WHERE id = '00000000-0000-0000-0000-000000000002');
+
+INSERT INTO roles (id, name)
+SELECT '00000000-0000-0000-0000-000000000003', 'employee'
+WHERE NOT EXISTS (SELECT 1 FROM roles WHERE id = '00000000-0000-0000-0000-000000000003');
 
 -- 階層関係設定
 UPDATE roles SET parent_id = '00000000-0000-0000-0000-000000000002' 
-WHERE name = 'employee';
+WHERE name = 'employee' AND parent_id IS NULL;
 
 UPDATE roles SET parent_id = '00000000-0000-0000-0000-000000000001' 
-WHERE name = 'manager';
+WHERE name = 'manager' AND parent_id IS NULL;
 
 -- サンプル権限
-INSERT INTO permissions (module, action) VALUES 
-  ('inventory', 'view'),
-  ('inventory', 'update'),
-  ('orders', 'create'),
-  ('orders', 'approve'),
-  ('reports', 'export');
+INSERT INTO permissions (module, action)
+SELECT 'inventory', 'view'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE module = 'inventory' AND action = 'view');
+
+INSERT INTO permissions (module, action)
+SELECT 'inventory', 'update'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE module = 'inventory' AND action = 'update');
+
+INSERT INTO permissions (module, action)
+SELECT 'orders', 'create'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE module = 'orders' AND action = 'create');
+
+INSERT INTO permissions (module, action)
+SELECT 'orders', 'approve'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE module = 'orders' AND action = 'approve');
+
+INSERT INTO permissions (module, action)
+SELECT 'reports', 'export'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE module = 'reports' AND action = 'export');
 
 -- ✨ 補足ポイント
 -- 1. JSONB活用: user_scopes.scope_value で {"department_id": "dpt-001", "project": "prj-XYZ"} のような複合スコープ

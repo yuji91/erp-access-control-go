@@ -61,8 +61,6 @@ type UserInfo struct {
 	ActiveRoles   []RoleInfo   `json:"active_roles,omitempty"`
 	HighestRole   *RoleInfo    `json:"highest_role,omitempty"`
 	Department    DeptInfo     `json:"department"`
-	// 後方互換性のため残す
-	Role          *RoleInfo    `json:"role,omitempty"`
 }
 
 // RoleInfo ロール情報（複数ロール対応）
@@ -225,8 +223,6 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 			ID:   user.PrimaryRole.ID,
 			Name: user.PrimaryRole.Name,
 		}
-		// 後方互換性のためRoleにも設定
-		userInfo.Role = userInfo.PrimaryRole
 	}
 
 	// アクティブロール情報を設定
@@ -301,7 +297,7 @@ func (s *AuthService) RefreshToken(currentToken string) (*LoginResponse, error) 
 
 	// Get updated user info and permissions
 	var user models.User
-	if err := s.db.Preload("Role").Preload("Department").
+	if err := s.db.Preload("PrimaryRole").Preload("Department").
 		First(&user, claims.UserID).Error; err != nil {
 		return nil, errors.NewDatabaseError(err)
 	}
@@ -334,14 +330,18 @@ func (s *AuthService) RefreshToken(currentToken string) (*LoginResponse, error) 
 		Name:   user.Name,
 		Email:  user.Email,
 		Status: string(user.Status),
-		Role: &RoleInfo{
-			ID:   user.Role.ID,
-			Name: user.Role.Name,
-		},
 		Department: DeptInfo{
 			ID:   user.Department.ID,
 			Name: user.Department.Name,
 		},
+	}
+
+	// プライマリロール情報を設定
+	if user.PrimaryRole != nil {
+		userInfo.PrimaryRole = &RoleInfo{
+			ID:   user.PrimaryRole.ID,
+			Name: user.PrimaryRole.Name,
+		}
 	}
 
 	return &LoginResponse{
@@ -406,7 +406,7 @@ func (s *AuthService) ValidatePermissionWithScope(userID uuid.UUID, permission s
 // GetUserProfile ユーザープロファイル情報を取得
 func (s *AuthService) GetUserProfile(userID uuid.UUID) (*UserInfo, error) {
 	var user models.User
-	if err := s.db.Preload("Role").Preload("Department").
+	if err := s.db.Preload("PrimaryRole").Preload("Department").
 		First(&user, userID).Error; err != nil {
 		return nil, errors.NewDatabaseError(err)
 	}
@@ -416,14 +416,18 @@ func (s *AuthService) GetUserProfile(userID uuid.UUID) (*UserInfo, error) {
 		Name:   user.Name,
 		Email:  user.Email,
 		Status: string(user.Status),
-		Role: &RoleInfo{
-			ID:   user.Role.ID,
-			Name: user.Role.Name,
-		},
 		Department: DeptInfo{
 			ID:   user.Department.ID,
 			Name: user.Department.Name,
 		},
+	}
+
+	// プライマリロール情報を設定
+	if user.PrimaryRole != nil {
+		userInfo.PrimaryRole = &RoleInfo{
+			ID:   user.PrimaryRole.ID,
+			Name: user.PrimaryRole.Name,
+		}
 	}
 
 	return userInfo, nil
