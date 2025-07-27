@@ -138,11 +138,15 @@ func (s *PermissionService) CreatePermission(req CreatePermissionRequest) (*Perm
 	}
 
 	// 重複チェック
-	existing, err := s.findPermissionByModuleAction(req.Module, req.Action)
-	if err != nil && !errors.IsNotFound(err) {
-		return nil, errors.NewDatabaseError(err)
-	}
-	if existing != nil {
+	_, err := s.findPermissionByModuleAction(req.Module, req.Action)
+	if err != nil {
+		// NotFoundエラー以外はデータベースエラーとして扱う
+		if !errors.IsNotFound(err) {
+			return nil, errors.NewDatabaseError(err)
+		}
+		// NotFoundは正常（重複なし）
+	} else {
+		// 既存権限が見つかった場合は重複エラー
 		return nil, errors.NewValidationError("module_action", "Permission with this module and action already exists")
 	}
 
@@ -173,7 +177,7 @@ func (s *PermissionService) CreatePermission(req CreatePermissionRequest) (*Perm
 func (s *PermissionService) GetPermission(id uuid.UUID) (*PermissionResponse, error) {
 	var permission models.Permission
 	if err := s.db.Preload("Roles").First(&permission, id).Error; err != nil {
-		if errors.IsNotFound(err) {
+		if err == gorm.ErrRecordNotFound {
 			return nil, errors.NewNotFoundError("permission", "Permission not found")
 		}
 		return nil, errors.NewDatabaseError(err)
@@ -191,7 +195,7 @@ func (s *PermissionService) UpdatePermission(id uuid.UUID, req UpdatePermissionR
 	// 権限取得
 	var permission models.Permission
 	if err := s.db.First(&permission, id).Error; err != nil {
-		if errors.IsNotFound(err) {
+		if err == gorm.ErrRecordNotFound {
 			return nil, errors.NewNotFoundError("permission", "Permission not found")
 		}
 		return nil, errors.NewDatabaseError(err)
@@ -231,7 +235,7 @@ func (s *PermissionService) DeletePermission(id uuid.UUID) error {
 	// 権限取得
 	var permission models.Permission
 	if err := s.db.First(&permission, id).Error; err != nil {
-		if errors.IsNotFound(err) {
+		if err == gorm.ErrRecordNotFound {
 			return errors.NewNotFoundError("permission", "Permission not found")
 		}
 		return errors.NewDatabaseError(err)
@@ -449,7 +453,7 @@ func (s *PermissionService) GetRolesByPermission(id uuid.UUID) ([]PermissionRole
 	// 権限存在確認
 	var permission models.Permission
 	if err := s.db.First(&permission, id).Error; err != nil {
-		if errors.IsNotFound(err) {
+		if err == gorm.ErrRecordNotFound {
 			return nil, errors.NewNotFoundError("permission", "Permission not found")
 		}
 		return nil, errors.NewDatabaseError(err)
@@ -479,7 +483,7 @@ func (s *PermissionService) findPermissionByModuleAction(module, action string) 
 	var permission models.Permission
 	err := s.db.Where("module = ? AND action = ?", module, action).First(&permission).Error
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if err == gorm.ErrRecordNotFound {
 			return nil, errors.NewNotFoundError("permission", "Permission not found")
 		}
 		return nil, err
@@ -1034,6 +1038,9 @@ func (s *PermissionService) isValidModule(module string) bool {
 		string(ModulePermission),
 		string(ModuleAudit),
 		string(ModuleSystem),
+		string(ModuleInventory),
+		string(ModuleOrders),
+		string(ModuleReports),
 	}
 
 	for _, valid := range validModules {

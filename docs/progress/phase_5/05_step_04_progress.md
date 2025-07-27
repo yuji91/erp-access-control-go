@@ -18,6 +18,20 @@ Permission管理APIの実装（Step 4）を開始します。PermissionService�
   - ✅ `GetPermissionsByModule()` - モジュール別権限取得
   - ✅ `GetRolesByPermission()` - 権限を持つロール一覧取得
 
+### **単体テスト実装** ✅ **完了**
+- **ファイル**: `internal/services/permission_test.go`（新規作成）
+- **実装済テスト**: 
+  - ✅ `TestPermissionService_CreatePermission` - 権限作成テスト（5サブテスト）
+  - ✅ `TestPermissionService_GetPermission` - 権限詳細取得テスト（2サブテスト）
+  - ✅ `TestPermissionService_UpdatePermission` - 権限更新テスト（3サブテスト）
+  - ✅ `TestPermissionService_DeletePermission` - 権限削除テスト（4サブテスト）
+  - ✅ `TestPermissionService_GetPermissions` - 権限一覧取得テスト（7サブテスト）
+  - ✅ `TestPermissionService_GetPermissionMatrix` - 権限マトリックステスト（1サブテスト）
+  - ✅ `TestPermissionService_GetPermissionsByModule` - モジュール別権限テスト（2サブテスト）
+  - ✅ `TestPermissionService_GetRolesByPermission` - ロール取得テスト（2サブテスト）
+  - ✅ `TestPermissionService_SystemPermissionProtection` - システム権限保護テスト（7サブテスト）
+- **総テストケース**: 33サブテスト（CRUD・バリデーション・セキュリティ・マトリックス全対応）
+
 ### **4.2 PermissionHandler実装** ⬜️ **未着手**
 - **ファイル**: `internal/handlers/permission.go`
 - **実装予定エンドポイント**:
