@@ -506,3 +506,224 @@ func TestRoleService_DeleteValidation(t *testing.T) {
 		})
 	})
 }
+
+// TestRoleService_PermissionInheritance 権限継承のテスト
+func TestRoleService_PermissionInheritance(t *testing.T) {
+	svc, db := setupTestRole(t)
+
+	t.Run("権限継承システム（基本構造）", func(t *testing.T) {
+		// 3階層のロール構造を作成
+		// 親ロール（レベル1）
+		parentRole := createTestRole(t, db, "管理者", nil)
+
+		// 子ロール（レベル2）
+		childRole := createTestRole(t, db, "部署管理者", &parentRole.ID)
+
+		// 孫ロール（レベル3）
+		grandChildRole := createTestRole(t, db, "一般ユーザー", &childRole.ID)
+
+		t.Run("階層構造確認", func(t *testing.T) {
+			// 親ロールの詳細取得
+			parentResp, err := svc.GetRole(parentRole.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "管理者", parentResp.Name)
+			assert.Nil(t, parentResp.ParentID)
+
+			// 子ロールの詳細取得
+			childResp, err := svc.GetRole(childRole.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "部署管理者", childResp.Name)
+			assert.NotNil(t, childResp.ParentID)
+			assert.Equal(t, parentRole.ID, *childResp.ParentID)
+
+			// 孫ロールの詳細取得
+			grandChildResp, err := svc.GetRole(grandChildRole.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "一般ユーザー", grandChildResp.Name)
+			assert.NotNil(t, grandChildResp.ParentID)
+			assert.Equal(t, childRole.ID, *grandChildResp.ParentID)
+		})
+
+		t.Run("権限継承メソッドの動作確認", func(t *testing.T) {
+			// 継承権限取得機能の確認（実際の権限データがなくても動作）
+			inherited, err := svc.getInheritedPermissions(childRole.ID)
+			require.NoError(t, err)
+
+			// 権限データがないため継承権限は0件
+			assert.Len(t, inherited, 0)
+
+			// 権限マージ機能の確認
+			direct := []PermissionInfo{}
+			merged := svc.mergePermissions(direct, inherited)
+			assert.Len(t, merged, 0)
+		})
+
+		t.Run("基本的な権限レスポンス構造", func(t *testing.T) {
+			// 権限なしの状態での権限レスポンス確認
+			perms, err := svc.GetRolePermissions(parentRole.ID)
+			require.NoError(t, err)
+
+			assert.Equal(t, parentRole.ID, perms.RoleID)
+			assert.Equal(t, "管理者", perms.RoleName)
+			assert.Len(t, perms.DirectPermissions, 0)
+			assert.Len(t, perms.InheritedPermissions, 0)
+			assert.Len(t, perms.AllPermissions, 0)
+		})
+	})
+
+	t.Run("権限マージアルゴリズム", func(t *testing.T) {
+		t.Run("空の権限リスト", func(t *testing.T) {
+			direct := []PermissionInfo{}
+			inherited := []InheritedPermissionInfo{}
+
+			result := svc.mergePermissions(direct, inherited)
+			assert.Len(t, result, 0)
+		})
+
+		t.Run("直接権限のみ", func(t *testing.T) {
+			perm := createTestPermission(t, db, "test", "action")
+
+			direct := []PermissionInfo{
+				{ID: perm.ID, Module: "test", Action: "action", Inherited: false},
+			}
+			inherited := []InheritedPermissionInfo{}
+
+			result := svc.mergePermissions(direct, inherited)
+			assert.Len(t, result, 1)
+			assert.False(t, result[0].Inherited)
+		})
+
+		t.Run("継承権限のみ", func(t *testing.T) {
+			perm := createTestPermission(t, db, "test2", "action2")
+
+			direct := []PermissionInfo{}
+			inherited := []InheritedPermissionInfo{
+				{ID: perm.ID, Module: "test2", Action: "action2"},
+			}
+
+			result := svc.mergePermissions(direct, inherited)
+			assert.Len(t, result, 1)
+			assert.True(t, result[0].Inherited)
+		})
+
+		t.Run("重複排除", func(t *testing.T) {
+			perm := createTestPermission(t, db, "test3", "action3")
+
+			direct := []PermissionInfo{
+				{ID: perm.ID, Module: "test3", Action: "action3", Inherited: false},
+			}
+			inherited := []InheritedPermissionInfo{
+				{ID: perm.ID, Module: "test3", Action: "action3"},
+			}
+
+			result := svc.mergePermissions(direct, inherited)
+			assert.Len(t, result, 1)
+			assert.False(t, result[0].Inherited) // 直接権限が優先
+		})
+	})
+}
+
+// TestRoleService_HierarchyManagement 階層管理システムのテスト
+func TestRoleService_HierarchyManagement(t *testing.T) {
+	svc, db := setupTestRole(t)
+
+	t.Run("階層ツリー構築", func(t *testing.T) {
+		// 複雑な階層構造を作成
+		/*
+			ルート1
+			├── 子1-1
+			│   ├── 孫1-1-1
+			│   └── 孫1-1-2
+			└── 子1-2
+			ルート2
+			└── 子2-1
+		*/
+		root1 := createTestRole(t, db, "ルート1", nil)
+		root2 := createTestRole(t, db, "ルート2", nil)
+
+		child1_1 := createTestRole(t, db, "子1-1", &root1.ID)
+		child1_2 := createTestRole(t, db, "子1-2", &root1.ID)
+		_ = createTestRole(t, db, "子2-1", &root2.ID) // root2の子ロール
+
+		grandchild1_1_1 := createTestRole(t, db, "孫1-1-1", &child1_1.ID)
+		grandchild1_1_2 := createTestRole(t, db, "孫1-1-2", &child1_1.ID)
+
+		t.Run("階層ツリー取得", func(t *testing.T) {
+			hierarchy, err := svc.GetRoleHierarchy()
+			require.NoError(t, err)
+
+			// ルートロールは2つ
+			assert.Len(t, hierarchy.Roles, 2)
+
+			// ルート1の構造確認
+			var root1Node *RoleHierarchyNode
+			for i := range hierarchy.Roles {
+				if hierarchy.Roles[i].Name == "ルート1" {
+					root1Node = &hierarchy.Roles[i]
+					break
+				}
+			}
+			require.NotNil(t, root1Node)
+			assert.Equal(t, 0, root1Node.Level)
+			assert.Len(t, root1Node.Children, 2)
+
+			// 子1-1の構造確認
+			var child1_1Node *RoleHierarchyNode
+			for i := range root1Node.Children {
+				if root1Node.Children[i].Name == "子1-1" {
+					child1_1Node = &root1Node.Children[i]
+					break
+				}
+			}
+			require.NotNil(t, child1_1Node)
+			assert.Equal(t, 1, child1_1Node.Level)
+			assert.Len(t, child1_1Node.Children, 2)
+		})
+
+		t.Run("深度計算", func(t *testing.T) {
+			depth, err := svc.calculateDepth(grandchild1_1_1.ID)
+			require.NoError(t, err)
+			assert.Equal(t, 3, depth) // 孫は3階層目
+
+			depth, err = svc.calculateDepth(root1.ID)
+			require.NoError(t, err)
+			assert.Equal(t, 1, depth) // ルートは1階層目
+		})
+
+		t.Run("子孫取得", func(t *testing.T) {
+			descendants, err := svc.getDescendants(root1.ID)
+			require.NoError(t, err)
+
+			// root1の子孫は4つ（子2つ + 孫2つ）
+			assert.Len(t, descendants, 4)
+
+			// 全ての子孫IDが含まれることを確認
+			descendantSet := make(map[uuid.UUID]bool)
+			for _, id := range descendants {
+				descendantSet[id] = true
+			}
+			assert.True(t, descendantSet[child1_1.ID])
+			assert.True(t, descendantSet[child1_2.ID])
+			assert.True(t, descendantSet[grandchild1_1_1.ID])
+			assert.True(t, descendantSet[grandchild1_1_2.ID])
+		})
+	})
+
+	t.Run("レベル計算", func(t *testing.T) {
+		parent := createTestRole(t, db, "レベルテスト親", nil)
+		child := createTestRole(t, db, "レベルテスト子", &parent.ID)
+		grandchild := createTestRole(t, db, "レベルテスト孫", &child.ID)
+
+		level, err := svc.calculateLevel(parent.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 0, level) // 親（ルート）はレベル0
+
+		level, err = svc.calculateLevel(child.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 1, level) // 子はレベル1
+
+		level, err = svc.calculateLevel(grandchild.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 2, level) // 孫はレベル2
+	})
+}
