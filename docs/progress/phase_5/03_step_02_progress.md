@@ -18,7 +18,7 @@ Department管理APIの実装（Step 2）の計画を策定しました。Departm
 
 ### **2.2 DepartmentHandler実装** ✅ **完了**
 - **ファイル**: `internal/handlers/department.go`
-- **実装済みエンドポイント**:
+- **実装済のエンドポイント**:
   - ✅ `POST /api/v1/departments` - 部署作成
   - ✅ `GET /api/v1/departments` - 部署一覧・階層
   - ✅ `GET /api/v1/departments/:id` - 部署詳細
@@ -28,7 +28,7 @@ Department管理APIの実装（Step 2）の計画を策定しました。Departm
 
 ### **2.3 階層管理・バリデーション** ✅ **完了**
 - **ファイル**: `internal/services/department.go`
-- **実装済み機能**:
+- **実装済の機能**:
   - ✅ **階層制限**: 循環参照防止・最大階層深度制限（5階層）
   - ✅ **削除制限**: 子部署存在時の削除禁止・所属ユーザー存在チェック
   - ✅ **移動制限**: 部署移動時の循環参照・深度チェック
@@ -143,7 +143,7 @@ Department管理APIの実装（Step 2）の計画を策定しました。Departm
 
 ### **単体テスト実装** ✅ **完了**
 - **ファイル**: `internal/services/department_test.go`
-- **実装済みテスト**:
+- **実装済のテスト**:
   - ✅ `TestDepartmentService_CreateDepartment` - 部署作成のテスト（4サブテスト）
   - ✅ `TestDepartmentService_GetDepartment` - 部署取得のテスト（3サブテスト）
   - ✅ `TestDepartmentService_UpdateDepartment` - 部署更新のテスト（4サブテスト）
@@ -163,7 +163,7 @@ Department管理APIの実装（Step 2）の計画を策定しました。Departm
 
 ### **統合テスト実装** ✅ **完了**
 - **ファイル**: `internal/handlers/department_integration_test.go`
-- **実装済みテスト**:
+- **実装済のテスト**:
   - ✅ `TestDepartmentHandler_CreateDepartment_Validation` - 部署作成バリデーション（5サブテスト）
   - ✅ `TestDepartmentHandler_GetDepartments_QueryParams` - クエリパラメータテスト（8サブテスト）
   - ✅ `TestDepartmentHandler_GetDepartment_PathParams` - パスパラメータテスト（3サブテスト）
