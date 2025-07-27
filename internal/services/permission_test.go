@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -148,10 +149,10 @@ func TestPermissionService_CreatePermission(t *testing.T) {
 	})
 
 	t.Run("異常系: 重複権限作成", func(t *testing.T) {
-		// 既存権限作成
+		// 既存権限作成（依存関係のない基本権限を使用）
 		req1 := CreatePermissionRequest{
 			Module: "orders",
-			Action: "read",
+			Action: "create", // createは依存関係なし
 		}
 		_, err := svc.CreatePermission(req1)
 		require.NoError(t, err)
@@ -159,12 +160,13 @@ func TestPermissionService_CreatePermission(t *testing.T) {
 		// 同じ権限を再作成（エラーになる）
 		req2 := CreatePermissionRequest{
 			Module: "orders",
-			Action: "read",
+			Action: "create",
 		}
 		_, err = svc.CreatePermission(req2)
 
 		assert.Error(t, err)
 		assert.True(t, errors.IsValidationError(err))
+		assert.Contains(t, err.Error(), "already exists")
 	})
 
 	t.Run("異常系: システム権限作成", func(t *testing.T) {
@@ -209,8 +211,8 @@ func TestPermissionService_GetPermission(t *testing.T) {
 	svc, db := setupTestPermission(t)
 
 	t.Run("正常系: 存在する権限取得", func(t *testing.T) {
-		// テスト権限作成
-		permission := createPermissionForPermissionTest(t, db, "inventory", "update")
+		// テスト権限作成（依存関係のない基本権限を使用）
+		permission := createPermissionForPermissionTest(t, db, "inventory", "create")
 
 		resp, err := svc.GetPermission(permission.ID)
 
@@ -218,8 +220,8 @@ func TestPermissionService_GetPermission(t *testing.T) {
 		assert.NotNil(t, resp)
 		assert.Equal(t, permission.ID, resp.ID)
 		assert.Equal(t, "inventory", resp.Module)
-		assert.Equal(t, "update", resp.Action)
-		assert.Equal(t, "inventory:update", resp.Code)
+		assert.Equal(t, "create", resp.Action)
+		assert.Equal(t, "inventory:create", resp.Code)
 		assert.NotNil(t, resp.Roles)
 		assert.NotNil(t, resp.UsageStats)
 	})
@@ -588,6 +590,193 @@ func TestPermissionService_SystemPermissionProtection(t *testing.T) {
 			assert.True(t, errors.IsValidationError(err))
 		})
 	}
+}
+
+// TestPermissionService_Step43_ValidationEnhancements Step 4.3 バリデーション強化テスト
+func TestPermissionService_Step43_ValidationEnhancements(t *testing.T) {
+	service, db := setupTestPermission(t)
+
+	t.Run("Module-Action組み合わせバリデーション", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			module   string
+			action   string
+			expected bool
+		}{
+			{"基本CRUD - user:create", "user", "create", true},
+			{"基本CRUD - user:read", "user", "read", true},
+			{"基本CRUD - user:update", "user", "update", true},
+			{"基本CRUD - user:delete", "user", "delete", true},
+			{"基本CRUD - user:list", "user", "list", true},
+			{"その他有効 - user:manage", "user", "manage", true},
+			{"その他有効 - user:view", "user", "view", true},
+			{"audit:view (許可)", "audit", "view", true},
+			{"audit:export (許可)", "audit", "export", true},
+			{"audit:create (禁止)", "audit", "create", false},
+			{"audit:update (禁止)", "audit", "update", false},
+			{"audit:delete (禁止)", "audit", "delete", false},
+			{"audit:manage (禁止)", "audit", "manage", false},
+			{"system:admin (許可)", "system", "admin", true},
+			{"system:create (禁止)", "system", "create", false},
+			{"system:read (禁止)", "system", "read", false},
+			{"system:update (禁止)", "system", "update", false},
+			{"orders:create (許可)", "orders", "create", true},
+			{"orders:approve (許可)", "orders", "approve", true},
+			{"無効なアクション", "user", "invalid", false},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result := service.isValidModuleActionCombination(tt.module, tt.action)
+				assert.Equal(t, tt.expected, result, "Expected %v for %s:%s", tt.expected, tt.module, tt.action)
+			})
+		}
+	})
+
+	t.Run("権限依存関係バリデーション", func(t *testing.T) {
+		// 前提条件権限を作成
+		createPermissionForPermissionTest(t, db, "user", "read")
+
+		// 依存関係チェック（read権限が存在するのでupdate権限作成可能）
+		err := service.validatePermissionDependencies("user", "update")
+		assert.NoError(t, err)
+
+		// manage権限もread権限が前提
+		err = service.validatePermissionDependencies("user", "manage")
+		assert.NoError(t, err)
+
+		// 依存関係チェック（readが存在しないモジュールでupdate権限作成）
+		err = service.validatePermissionDependencies("nonexistent", "update")
+		assert.Error(t, err)
+		assert.True(t, errors.IsValidationError(err))
+		assert.Contains(t, err.Error(), "Required permission")
+
+		// view権限を作成してexport権限をテスト
+		createPermissionForPermissionTest(t, db, "report", "view")
+		err = service.validatePermissionDependencies("report", "export")
+		assert.NoError(t, err)
+
+		// view権限がない場合のexport権限
+		err = service.validatePermissionDependencies("missing", "export")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Required permission")
+	})
+
+	t.Run("権限削除時の依存関係チェック", func(t *testing.T) {
+		// read権限とupdate権限を作成
+		createPermissionForPermissionTest(t, db, "test", "read")
+		createPermissionForPermissionTest(t, db, "test", "update")
+
+		// update権限が存在するので、read権限は削除できない
+		err := service.validatePermissionDeletion("test", "read")
+		assert.Error(t, err)
+		assert.True(t, errors.IsValidationError(err))
+		assert.Contains(t, err.Error(), "required by")
+		assert.Contains(t, err.Error(), "test:update")
+
+		// update権限は削除可能（依存されていない）
+		err = service.validatePermissionDeletion("test", "update")
+		assert.NoError(t, err)
+
+		// 複数の依存関係をテスト
+		createPermissionForPermissionTest(t, db, "complex", "read")
+		createPermissionForPermissionTest(t, db, "complex", "update")
+		createPermissionForPermissionTest(t, db, "complex", "delete")
+		createPermissionForPermissionTest(t, db, "complex", "manage")
+
+		// read権限は多くの権限に依存されている
+		err = service.validatePermissionDeletion("complex", "read")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "required by")
+
+		// update権限はdelete権限に依存されている
+		err = service.validatePermissionDeletion("complex", "update")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "required by")
+		assert.Contains(t, err.Error(), "complex:delete")
+	})
+
+	t.Run("システム権限保護包括テスト", func(t *testing.T) {
+		systemPermissions := []struct {
+			module string
+			action string
+		}{
+			{"user", "read"},
+			{"user", "list"},
+			{"department", "read"},
+			{"department", "list"},
+			{"role", "read"},
+			{"role", "list"},
+			{"permission", "read"},
+			{"permission", "list"},
+			{"system", "admin"},
+		}
+
+		for _, perm := range systemPermissions {
+			t.Run(fmt.Sprintf("システム権限: %s:%s", perm.module, perm.action), func(t *testing.T) {
+				req := CreatePermissionRequest{
+					Module: perm.module,
+					Action: perm.action,
+				}
+
+				_, err := service.CreatePermission(req)
+				assert.Error(t, err)
+				assert.True(t, errors.IsValidationError(err))
+				assert.Contains(t, err.Error(), "system permission")
+			})
+		}
+	})
+
+	t.Run("複合バリデーションテスト", func(t *testing.T) {
+		// 組み合わせ無効 + システム権限のテスト
+		req := CreatePermissionRequest{
+			Module: "audit",
+			Action: "read", // auditモジュールでreadは無効 + システム権限
+		}
+
+		_, err := service.CreatePermission(req)
+		assert.Error(t, err)
+		assert.True(t, errors.IsValidationError(err))
+		// 組み合わせチェックが先に実行される
+		assert.Contains(t, err.Error(), "Invalid combination")
+	})
+
+	t.Run("権限階層チェーンテスト", func(t *testing.T) {
+		// 段階的に権限を作成して依存関係をテスト（システム権限でないモジュールを使用）
+		createPermissionForPermissionTest(t, db, "inventory", "read")
+
+		// read → update
+		req1 := CreatePermissionRequest{Module: "inventory", Action: "update"}
+		_, err := service.CreatePermission(req1)
+		assert.NoError(t, err)
+
+		// read + update → delete
+		req2 := CreatePermissionRequest{Module: "inventory", Action: "delete"}
+		_, err = service.CreatePermission(req2)
+		assert.NoError(t, err)
+
+		// read → manage
+		req3 := CreatePermissionRequest{Module: "inventory", Action: "manage"}
+		_, err = service.CreatePermission(req3)
+		assert.NoError(t, err)
+
+		// 階層削除テスト：read権限は削除できない（多くの権限に依存される）
+		err = service.validatePermissionDeletion("inventory", "read")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "required by")
+
+		// update権限も削除できない（delete権限に依存される）
+		err = service.validatePermissionDeletion("inventory", "update")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "required by")
+
+		// delete権限とmanage権限は削除可能
+		err = service.validatePermissionDeletion("inventory", "delete")
+		assert.NoError(t, err)
+
+		err = service.validatePermissionDeletion("inventory", "manage")
+		assert.NoError(t, err)
+	})
 }
 
 // stringPtr 文字列ポインタ作成ヘルパー

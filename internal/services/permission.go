@@ -132,9 +132,14 @@ type ModulePermissionsResponse struct {
 
 // CreatePermission 権限作成
 func (s *PermissionService) CreatePermission(req CreatePermissionRequest) (*PermissionResponse, error) {
-	// 入力値検証
+	// 入力値検証（基本形式・組み合わせ・依存関係）
 	if err := s.validateCreateRequest(req); err != nil {
 		return nil, err
+	}
+
+	// システム権限チェック
+	if s.isSystemPermission(req.Module, req.Action) {
+		return nil, errors.NewValidationError("system_permission", "Cannot create system permissions")
 	}
 
 	// 重複チェック
@@ -148,11 +153,6 @@ func (s *PermissionService) CreatePermission(req CreatePermissionRequest) (*Perm
 	} else {
 		// 既存権限が見つかった場合は重複エラー
 		return nil, errors.NewValidationError("module_action", "Permission with this module and action already exists")
-	}
-
-	// システム権限チェック
-	if s.isSystemPermission(req.Module, req.Action) {
-		return nil, errors.NewValidationError("system_permission", "Cannot create system permissions")
 	}
 
 	// 権限作成
@@ -254,6 +254,11 @@ func (s *PermissionService) DeletePermission(id uuid.UUID) error {
 
 	if roleCount > 0 {
 		return errors.NewValidationError("role_assigned", fmt.Sprintf("Cannot delete permission assigned to %d roles", roleCount))
+	}
+
+	// 権限依存関係チェック（この権限を前提とする他の権限があるかチェック）
+	if err := s.validatePermissionDeletion(permission.Module, permission.Action); err != nil {
+		return err
 	}
 
 	// 権限削除
@@ -475,6 +480,18 @@ func (s *PermissionService) validateCreateRequest(req CreatePermissionRequest) e
 	if !s.isValidAction(req.Action) {
 		return errors.NewValidationError("action", "Invalid action: "+req.Action)
 	}
+
+	// Module-Action組み合わせの有効性チェック
+	if !s.isValidModuleActionCombination(req.Module, req.Action) {
+		return errors.NewValidationError("module_action",
+			fmt.Sprintf("Invalid combination: %s:%s is not allowed for this module", req.Module, req.Action))
+	}
+
+	// 権限依存関係チェック（前提条件権限の存在確認）
+	if err := s.validatePermissionDependencies(req.Module, req.Action); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -508,6 +525,142 @@ func (s *PermissionService) isSystemPermission(module, action string) bool {
 	return false
 }
 
+// isValidModuleActionCombination Module-Action組み合わせの有効性チェック
+func (s *PermissionService) isValidModuleActionCombination(module, action string) bool {
+	// 制限付きモジュール：特定のアクションのみ許可
+	restrictedModules := map[string][]string{
+		string(ModuleAudit):  {string(ActionView), string(ActionExport)}, // 監査ログは閲覧・エクスポートのみ
+		string(ModuleSystem): {string(ActionAdmin)},                      // システムは管理のみ
+	}
+
+	// 制限付きモジュールの場合は許可リストのみ有効
+	if allowedActions, exists := restrictedModules[module]; exists {
+		for _, allowedAction := range allowedActions {
+			if action == allowedAction {
+				return true
+			}
+		}
+		return false // 制限リストにない場合は無効
+	}
+
+	// その他のモジュールは基本CRUD操作が有効
+	basicActions := []string{
+		string(ActionCreate), string(ActionRead), string(ActionUpdate),
+		string(ActionDelete), string(ActionList),
+	}
+
+	for _, basicAction := range basicActions {
+		if action == basicAction {
+			return true
+		}
+	}
+
+	// その他の有効なアクション
+	otherValidActions := []string{
+		string(ActionManage), string(ActionView), string(ActionApprove), string(ActionExport),
+	}
+
+	for _, validAction := range otherValidActions {
+		if action == validAction {
+			return true
+		}
+	}
+
+	return false
+}
+
+// validatePermissionDependencies 権限依存関係のバリデーション
+func (s *PermissionService) validatePermissionDependencies(module, action string) error {
+	// 権限階層：より強い権限には、より弱い権限が前提として必要
+	dependencies := map[string][]string{
+		// 管理権限は読み取り権限が前提
+		module + ":" + string(ActionManage): {module + ":" + string(ActionRead)},
+		// 更新権限は読み取り権限が前提
+		module + ":" + string(ActionUpdate): {module + ":" + string(ActionRead)},
+		// 削除権限は更新権限が前提
+		module + ":" + string(ActionDelete): {module + ":" + string(ActionUpdate), module + ":" + string(ActionRead)},
+		// 承認権限は読み取り権限が前提
+		module + ":" + string(ActionApprove): {module + ":" + string(ActionRead)},
+		// エクスポート権限は閲覧権限が前提
+		module + ":" + string(ActionExport): {module + ":" + string(ActionView)},
+	}
+
+	permissionKey := module + ":" + action
+	requiredPermissions, exists := dependencies[permissionKey]
+	if !exists {
+		return nil // 依存関係なし
+	}
+
+	// 前提条件権限の存在確認
+	for _, requiredPerm := range requiredPermissions {
+		parts := strings.Split(requiredPerm, ":")
+		if len(parts) != 2 {
+			continue
+		}
+
+		requiredModule, requiredAction := parts[0], parts[1]
+		_, err := s.findPermissionByModuleAction(requiredModule, requiredAction)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return errors.NewValidationError("permission_dependency",
+					fmt.Sprintf("Required permission '%s' must exist before creating '%s'", requiredPerm, permissionKey))
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validatePermissionDeletion 権限削除時の依存関係チェック
+func (s *PermissionService) validatePermissionDeletion(module, action string) error {
+	permissionKey := module + ":" + action
+
+	// この権限を前提とする権限を検索
+	dependentPermissions := []string{}
+
+	// 全ての権限依存関係をチェック
+	allDependencies := map[string][]string{
+		// 管理権限は読み取り権限が前提
+		module + ":" + string(ActionManage): {module + ":" + string(ActionRead)},
+		// 更新権限は読み取り権限が前提
+		module + ":" + string(ActionUpdate): {module + ":" + string(ActionRead)},
+		// 削除権限は更新権限が前提
+		module + ":" + string(ActionDelete): {module + ":" + string(ActionUpdate), module + ":" + string(ActionRead)},
+		// 承認権限は読み取り権限が前提
+		module + ":" + string(ActionApprove): {module + ":" + string(ActionRead)},
+		// エクスポート権限は閲覧権限が前提
+		module + ":" + string(ActionExport): {module + ":" + string(ActionView)},
+	}
+
+	// この権限に依存する権限を探す
+	for dependentPerm, requiredPerms := range allDependencies {
+		for _, requiredPerm := range requiredPerms {
+			if requiredPerm == permissionKey {
+				// この権限に依存する権限が存在するかチェック
+				parts := strings.Split(dependentPerm, ":")
+				if len(parts) == 2 {
+					depModule, depAction := parts[0], parts[1]
+					_, err := s.findPermissionByModuleAction(depModule, depAction)
+					if err == nil {
+						// 依存する権限が存在する
+						dependentPermissions = append(dependentPermissions, dependentPerm)
+					}
+				}
+			}
+		}
+	}
+
+	// 依存する権限が存在する場合はエラー
+	if len(dependentPermissions) > 0 {
+		return errors.NewValidationError("permission_dependency",
+			fmt.Sprintf("Cannot delete '%s' because it is required by: %s",
+				permissionKey, strings.Join(dependentPermissions, ", ")))
+	}
+
+	return nil
+}
+
 // convertToPermissionResponse Permissionモデルをレスポンスに変換
 func (s *PermissionService) convertToPermissionResponse(permission *models.Permission) PermissionResponse {
 	return PermissionResponse{
@@ -523,7 +676,7 @@ func (s *PermissionService) convertToPermissionResponse(permission *models.Permi
 
 // getRoleInfoForPermission 権限に関連するロール情報取得
 func (s *PermissionService) getRoleInfoForPermission(permissionID uuid.UUID) []PermissionRoleInfo {
-	var roleInfos []PermissionRoleInfo
+	roleInfos := make([]PermissionRoleInfo, 0)
 
 	query := `
 		SELECT r.id, r.name, COUNT(ur.user_id) as user_count

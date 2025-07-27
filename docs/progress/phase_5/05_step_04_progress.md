@@ -53,15 +53,32 @@ Permission管理APIの実装（Step 4）を開始します。PermissionService�
 - ✅ **サーバー統合**: `cmd/server/main.go` でのルーティング設定完了
 - ✅ **API仕様更新**: エンドポイント一覧にPermission API追加
 
-### **4.3 権限マトリックス・バリデーション** ⬜️ **未着手**
-- **ファイル**: `internal/services/permission.go`
-- **実装予定機能**:
-  - ⬜️ **Module・Action検証**: 有効なモジュール・アクション名の定義と検証
-  - ⬜️ **重複チェック**: 同一module+actionの権限重複作成防止
-  - ⬜️ **削除制限**: ロール割り当て済み権限の削除制限
-  - ⬜️ **権限マトリックス生成**: モジュール×アクションの2次元表示
-  - ⬜️ **システム権限保護**: 基本システム権限の変更・削除防止
-  - ⬜️ **権限階層管理**: 権限の依存関係・前提条件チェック
+### **4.3 権限マトリックス・バリデーション** ✅ **完了**
+- **ファイル**: `internal/services/permission.go` (200行追加)
+- **実装済み機能**:
+  - ✅ **Module・Action検証**: 有効なモジュール・アクション名の定義と検証 (`isValidModule`, `isValidAction`, `getAllValidModules`, `getAllValidActions`)
+  - ✅ **重複チェック**: 同一module+actionの権限重複作成防止 (`findPermissionByModuleAction` in `CreatePermission`)
+  - ✅ **削除制限**: ロール割り当て済み権限の削除制限 (ロール割り当てチェック in `DeletePermission`)
+  - ✅ **権限マトリックス生成**: モジュール×アクションの2次元表示 (`GetPermissionMatrix`)
+  - ✅ **システム権限保護**: 基本システム権限の変更・削除防止 (`isSystemPermission` in Create/Update/Delete)
+  - ✅ **権限階層管理**: 権限の依存関係・前提条件チェック (`validatePermissionDependencies`, `validatePermissionDeletion`)
+  - ✅ **Module-Action組み合わせ制限**: 特定モジュール（audit, system）での不適切な組み合わせ防止 (`isValidModuleActionCombination`)
+
+#### **新規実装機能詳細**
+- ✅ **権限依存関係システム**: 階層的権限（manage→read, update→read, delete→update+read等）の前提条件チェック
+- ✅ **権限削除時保護**: 他権限の前提条件となっている権限の削除防止
+- ✅ **Module-Action制限**: audit（view/export）・system（admin）モジュールでの適切な権限制御
+- ✅ **拡張バリデーション**: 作成・更新・削除時の包括的ルールチェック
+
+#### **単体テスト実装** ✅ **完了**
+- ✅ **既存テスト修正**: 依存関係バリデーション対応・nil値初期化問題修正
+- ✅ **Step 4.3拡張テスト**: `TestPermissionService_Step43_ValidationEnhancements`
+  - Module-Action組み合わせバリデーション（20テストケース）
+  - 権限依存関係バリデーション（8テストケース）
+  - 権限削除時の依存関係チェック（8テストケース）
+  - システム権限保護包括テスト（9テストケース）
+  - 複合バリデーション・権限階層チェーンテスト（8テストケース）
+- ✅ **テスト統計**: 79テストケース全成功（100%パス率）
 
 ## 🔧 **実装計画詳細**
 
