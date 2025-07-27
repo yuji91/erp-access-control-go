@@ -344,7 +344,7 @@ demo: ## 🎯 権限管理システムデモ実行（全API機能紹介）
 		echo "$(GREEN)✅ サーバーが起動中です$(RESET)"; \
 	fi
 	@echo ""
-	@./scripts/demo-permission-system.sh
+	@./scripts/demo-permission-system-final.sh
 
 .PHONY: demo-help
 demo-help: ## 📖 デモスクリプトのヘルプ表示
