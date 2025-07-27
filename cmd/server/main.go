@@ -98,7 +98,7 @@ func initServices(db *gorm.DB, cfg *config.Config) *ServiceContainer {
 	jwtService := jwt.NewService(cfg.JWT.Secret, cfg.JWT.AccessTokenDuration)
 
 	// 基本サービス
-	permissionService := services.NewPermissionService(db)
+	permissionService := services.NewPermissionService(db, appLogger)
 	revocationService := services.NewTokenRevocationService(db)
 	userRoleService := services.NewUserRoleService(db)
 	userService := services.NewUserService(db, appLogger)
@@ -186,6 +186,9 @@ func setupRoutes(services *ServiceContainer, middlewares *MiddlewareContainer, a
 
 			// ロール管理
 			setupRoleRoutes(protected, services.Role, appLogger)
+
+			// 権限管理
+			setupPermissionRoutes(protected, services.Permission, appLogger)
 		}
 	}
 
@@ -257,6 +260,14 @@ func setupBasicRoutes(router *gin.Engine) {
 				"DELETE /api/v1/roles/{id}         - ロール削除",
 				"PUT /api/v1/roles/{id}/permissions - 権限割り当て",
 				"GET /api/v1/roles/{id}/permissions - ロール権限一覧",
+				"POST /api/v1/permissions          - 権限作成",
+				"GET /api/v1/permissions           - 権限一覧",
+				"GET /api/v1/permissions/matrix    - 権限マトリックス",
+				"GET /api/v1/permissions/modules/{module} - モジュール別権限",
+				"GET /api/v1/permissions/{id}      - 権限詳細",
+				"PUT /api/v1/permissions/{id}      - 権限更新",
+				"DELETE /api/v1/permissions/{id}   - 権限削除",
+				"GET /api/v1/permissions/{id}/roles - 権限を持つロール一覧",
 			},
 		})
 	})
@@ -309,9 +320,9 @@ func setupUserRoleRoutes(group *gin.RouterGroup, userRoleService *services.UserR
 	userRoleHandler := handlers.NewUserRoleHandler(userRoleService)
 
 	group.POST("/users/roles", userRoleHandler.AssignRole)
-	group.GET("/users/:user_id/roles", userRoleHandler.GetUserRoles)
-	group.PATCH("/users/:user_id/roles/:role_id", userRoleHandler.UpdateRole)
-	group.DELETE("/users/:user_id/roles/:role_id", userRoleHandler.RevokeRole)
+	group.GET("/users/:id/roles", userRoleHandler.GetUserRoles)
+	group.PATCH("/users/:id/roles/:role_id", userRoleHandler.UpdateRole)
+	group.DELETE("/users/:id/roles/:role_id", userRoleHandler.RevokeRole)
 }
 
 // setupDepartmentRoutes 部署管理エンドポイントを設定
@@ -344,6 +355,23 @@ func setupRoleRoutes(group *gin.RouterGroup, roleService *services.RoleService, 
 		roles.DELETE("/:id", middleware.RequirePermissions("role:delete"), roleHandler.DeleteRole)                 // DELETE /api/v1/roles/:id
 		roles.PUT("/:id/permissions", middleware.RequirePermissions("role:manage"), roleHandler.AssignPermissions) // PUT /api/v1/roles/:id/permissions
 		roles.GET("/:id/permissions", middleware.RequirePermissions("role:read"), roleHandler.GetRolePermissions)  // GET /api/v1/roles/:id/permissions
+	}
+}
+
+// setupPermissionRoutes 権限管理エンドポイントを設定
+func setupPermissionRoutes(group *gin.RouterGroup, permissionService *services.PermissionService, appLogger *logger.Logger) {
+	permissionHandler := handlers.NewPermissionHandler(permissionService, appLogger)
+
+	permissions := group.Group("/permissions")
+	{
+		permissions.POST("", middleware.RequirePermissions("permission:create"), permissionHandler.CreatePermission)                    // POST /api/v1/permissions
+		permissions.GET("", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissions)                         // GET /api/v1/permissions
+		permissions.GET("/matrix", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissionMatrix)             // GET /api/v1/permissions/matrix
+		permissions.GET("/modules/:module", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissionsByModule) // GET /api/v1/permissions/modules/:module
+		permissions.GET("/:id", middleware.RequirePermissions("permission:read"), permissionHandler.GetPermission)                      // GET /api/v1/permissions/:id
+		permissions.PUT("/:id", middleware.RequirePermissions("permission:update"), permissionHandler.UpdatePermission)                 // PUT /api/v1/permissions/:id
+		permissions.DELETE("/:id", middleware.RequirePermissions("permission:delete"), permissionHandler.DeletePermission)              // DELETE /api/v1/permissions/:id
+		permissions.GET("/:id/roles", middleware.RequirePermissions("permission:read"), permissionHandler.GetRolesByPermission)         // GET /api/v1/permissions/:id/roles
 	}
 }
 

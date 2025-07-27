@@ -127,7 +127,7 @@ func setupRoleIntegrationTest(t *testing.T) (*gin.Engine, *services.RoleService,
 	return router, roleService, db
 }
 
-func createTestRoleViaDB(t *testing.T, db *gorm.DB, name string, parentID *string) string {
+func createRoleForRoleIntegrationTest(t *testing.T, db *gorm.DB, name string, parentID *string) string {
 	roleID := uuid.New().String()
 	var query string
 	var args []interface{}
@@ -172,7 +172,7 @@ func TestRoleHandler_CreateRole_Validation(t *testing.T) {
 
 	t.Run("正常系: 親ロール付きロール作成", func(t *testing.T) {
 		// 親ロール作成
-		parentID := createTestRoleViaDB(t, db, "親ロール", nil)
+		parentID := createRoleForRoleIntegrationTest(t, db, "親ロール", nil)
 
 		reqBody := map[string]interface{}{
 			"name":      "子ロール",
@@ -228,7 +228,7 @@ func TestRoleHandler_CreateRole_Validation(t *testing.T) {
 
 	t.Run("異常系: 重複ロール名", func(t *testing.T) {
 		// 既存ロール作成
-		createTestRoleViaDB(t, db, "重複テストロール", nil)
+		createRoleForRoleIntegrationTest(t, db, "重複テストロール", nil)
 
 		reqBody := map[string]interface{}{
 			"name": "重複テストロール",
@@ -260,10 +260,10 @@ func TestRoleHandler_GetRoles_QueryParams(t *testing.T) {
 	router, _, db := setupRoleIntegrationTest(t)
 
 	// テストデータ作成
-	role1ID := createTestRoleViaDB(t, db, "親ロール1", nil)
-	role2ID := createTestRoleViaDB(t, db, "親ロール2", nil)
-	child1ID := createTestRoleViaDB(t, db, "子ロール1", &role1ID)
-	createTestRoleViaDB(t, db, "子ロール2", &role2ID)
+	role1ID := createRoleForRoleIntegrationTest(t, db, "親ロール1", nil)
+	role2ID := createRoleForRoleIntegrationTest(t, db, "親ロール2", nil)
+	child1ID := createRoleForRoleIntegrationTest(t, db, "子ロール1", &role1ID)
+	createRoleForRoleIntegrationTest(t, db, "子ロール2", &role2ID)
 
 	t.Run("正常系: 全ロール取得", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/api/v1/roles", nil)
@@ -362,7 +362,7 @@ func TestRoleHandler_GetRole_PathParams(t *testing.T) {
 	router, _, db := setupRoleIntegrationTest(t)
 
 	// テストデータ作成
-	roleID := createTestRoleViaDB(t, db, "取得テストロール", nil)
+	roleID := createRoleForRoleIntegrationTest(t, db, "取得テストロール", nil)
 
 	t.Run("正常系: 存在するロール取得", func(t *testing.T) {
 		req := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/roles/%s", roleID), nil)
@@ -501,9 +501,9 @@ func TestRoleHandler_GetRoleHierarchy(t *testing.T) {
 	router, _, db := setupRoleIntegrationTest(t)
 
 	// 階層構造作成
-	rootID := createTestRoleViaDB(t, db, "ルートロール", nil)
-	childID := createTestRoleViaDB(t, db, "子ロール", &rootID)
-	createTestRoleViaDB(t, db, "孫ロール", &childID)
+	rootID := createRoleForRoleIntegrationTest(t, db, "ルートロール", nil)
+	childID := createRoleForRoleIntegrationTest(t, db, "子ロール", &rootID)
+	createRoleForRoleIntegrationTest(t, db, "孫ロール", &childID)
 
 	t.Run("正常系: 階層ツリー取得", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/api/v1/roles/hierarchy", nil)

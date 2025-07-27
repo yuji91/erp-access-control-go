@@ -80,7 +80,7 @@ func setupTestRole(t *testing.T) (*RoleService, *gorm.DB) {
 	return NewRoleService(db, log), db
 }
 
-func createTestRole(t *testing.T, db *gorm.DB, name string, parentID *uuid.UUID) *models.Role {
+func createRoleForRoleTest(t *testing.T, db *gorm.DB, name string, parentID *uuid.UUID) *models.Role {
 	role := &models.Role{
 		Name:     name,
 		ParentID: parentID,
@@ -89,7 +89,7 @@ func createTestRole(t *testing.T, db *gorm.DB, name string, parentID *uuid.UUID)
 	return role
 }
 
-func createTestPermission(t *testing.T, db *gorm.DB, module, action string) *models.Permission {
+func createPermissionForRoleTest(t *testing.T, db *gorm.DB, module, action string) *models.Permission {
 	// 直接SQLで挿入（GORM/SQLiteのUUID問題回避）
 	permID := uuid.New()
 	err := db.Exec(`
@@ -106,7 +106,7 @@ func createTestPermission(t *testing.T, db *gorm.DB, module, action string) *mod
 	return permission
 }
 
-func createTestUser(t *testing.T, db *gorm.DB, name, email string, primaryRoleID *uuid.UUID) *models.User {
+func createUserForRoleTest(t *testing.T, db *gorm.DB, name, email string, primaryRoleID *uuid.UUID) *models.User {
 	// 直接SQLで挿入（GORM/SQLiteのUUID問題回避）
 	userID := uuid.New()
 	err := db.Exec(`
@@ -179,7 +179,7 @@ func TestRoleService_InputValidation(t *testing.T) {
 
 		t.Run("異常系: 重複ロール名", func(t *testing.T) {
 			// 最初のロール作成
-			existingRole := createTestRole(t, db, "既存ロール", nil)
+			existingRole := createRoleForRoleTest(t, db, "既存ロール", nil)
 
 			req := CreateRoleRequest{
 				Name: existingRole.Name,
@@ -205,7 +205,7 @@ func TestRoleService_InputValidation(t *testing.T) {
 		})
 
 		t.Run("正常系: 有効な親ロールID", func(t *testing.T) {
-			parentRole := createTestRole(t, db, "親ロール", nil)
+			parentRole := createRoleForRoleTest(t, db, "親ロール", nil)
 
 			req := CreateRoleRequest{
 				Name:     "子ロール",
@@ -244,11 +244,11 @@ func TestRoleService_InputValidation(t *testing.T) {
 
 		t.Run("異常系: 最大階層深度超過", func(t *testing.T) {
 			// 5階層のロール構造を作成
-			level1 := createTestRole(t, db, "レベル1", nil)
-			level2 := createTestRole(t, db, "レベル2", &level1.ID)
-			level3 := createTestRole(t, db, "レベル3", &level2.ID)
-			level4 := createTestRole(t, db, "レベル4", &level3.ID)
-			level5 := createTestRole(t, db, "レベル5", &level4.ID)
+			level1 := createRoleForRoleTest(t, db, "レベル1", nil)
+			level2 := createRoleForRoleTest(t, db, "レベル2", &level1.ID)
+			level3 := createRoleForRoleTest(t, db, "レベル3", &level2.ID)
+			level4 := createRoleForRoleTest(t, db, "レベル4", &level3.ID)
+			level5 := createRoleForRoleTest(t, db, "レベル5", &level4.ID)
 
 			// 6階層目を作成しようとする
 			req := CreateRoleRequest{
@@ -264,7 +264,7 @@ func TestRoleService_InputValidation(t *testing.T) {
 	})
 
 	t.Run("UpdateRole入力値検証", func(t *testing.T) {
-		existingRole := createTestRole(t, db, "更新対象ロール", nil)
+		existingRole := createRoleForRoleTest(t, db, "更新対象ロール", nil)
 
 		t.Run("正常系: 有効なロール名更新", func(t *testing.T) {
 			newName := "更新後ロール名"
@@ -278,7 +278,7 @@ func TestRoleService_InputValidation(t *testing.T) {
 		})
 
 		t.Run("異常系: 更新時の重複ロール名", func(t *testing.T) {
-			otherRole := createTestRole(t, db, "他のロール", nil)
+			otherRole := createRoleForRoleTest(t, db, "他のロール", nil)
 
 			req := UpdateRoleRequest{
 				Name: &otherRole.Name,
@@ -302,7 +302,7 @@ func TestRoleService_InputValidation(t *testing.T) {
 		})
 
 		t.Run("正常系: 親ロール変更", func(t *testing.T) {
-			parentRole := createTestRole(t, db, "新しい親ロール", nil)
+			parentRole := createRoleForRoleTest(t, db, "新しい親ロール", nil)
 
 			req := UpdateRoleRequest{
 				ParentID: &parentRole.ID,
@@ -315,7 +315,7 @@ func TestRoleService_InputValidation(t *testing.T) {
 	})
 
 	t.Run("基本的なAssignPermissions検証", func(t *testing.T) {
-		testRole := createTestRole(t, db, "権限テストロール", nil)
+		testRole := createRoleForRoleTest(t, db, "権限テストロール", nil)
 
 		t.Run("異常系: 存在しない権限ID", func(t *testing.T) {
 			nonExistentID := uuid.New()
@@ -363,9 +363,9 @@ func TestRoleService_HierarchyValidation(t *testing.T) {
 
 	t.Run("循環参照検証", func(t *testing.T) {
 		// A -> B -> C の階層を作成
-		roleA := createTestRole(t, db, "ロールA", nil)
-		roleB := createTestRole(t, db, "ロールB", &roleA.ID)
-		roleC := createTestRole(t, db, "ロールC", &roleB.ID)
+		roleA := createRoleForRoleTest(t, db, "ロールA", nil)
+		roleB := createRoleForRoleTest(t, db, "ロールB", &roleA.ID)
+		roleC := createRoleForRoleTest(t, db, "ロールC", &roleB.ID)
 
 		t.Run("異常系: 直接循環参照", func(t *testing.T) {
 			// A の親を C にしようとする（A -> B -> C -> A の循環）
@@ -393,7 +393,7 @@ func TestRoleService_HierarchyValidation(t *testing.T) {
 
 		t.Run("正常系: 循環しない移動", func(t *testing.T) {
 			// 新しい独立したロールを作成し、C の親にする
-			newParent := createTestRole(t, db, "新しい親", nil)
+			newParent := createRoleForRoleTest(t, db, "新しい親", nil)
 
 			req := UpdateRoleRequest{
 				ParentID: &newParent.ID,
@@ -407,10 +407,10 @@ func TestRoleService_HierarchyValidation(t *testing.T) {
 
 	t.Run("階層深度検証", func(t *testing.T) {
 		// 4階層の構造を作成
-		level1 := createTestRole(t, db, "階層1", nil)
-		level2 := createTestRole(t, db, "階層2", &level1.ID)
-		level3 := createTestRole(t, db, "階層3", &level2.ID)
-		level4 := createTestRole(t, db, "階層4", &level3.ID)
+		level1 := createRoleForRoleTest(t, db, "階層1", nil)
+		level2 := createRoleForRoleTest(t, db, "階層2", &level1.ID)
+		level3 := createRoleForRoleTest(t, db, "階層3", &level2.ID)
+		level4 := createRoleForRoleTest(t, db, "階層4", &level3.ID)
 
 		t.Run("正常系: 5階層目まで作成可能", func(t *testing.T) {
 			req := CreateRoleRequest{
@@ -424,7 +424,7 @@ func TestRoleService_HierarchyValidation(t *testing.T) {
 		})
 
 		t.Run("異常系: 6階層目は作成不可", func(t *testing.T) {
-			level5 := createTestRole(t, db, "階層5-2", &level4.ID)
+			level5 := createRoleForRoleTest(t, db, "階層5-2", &level4.ID)
 
 			req := CreateRoleRequest{
 				Name:     "階層6",
@@ -444,8 +444,8 @@ func TestRoleService_DeleteValidation(t *testing.T) {
 	svc, db := setupTestRole(t)
 
 	t.Run("削除制限検証", func(t *testing.T) {
-		parentRole := createTestRole(t, db, "親ロール", nil)
-		childRole := createTestRole(t, db, "子ロール", &parentRole.ID)
+		parentRole := createRoleForRoleTest(t, db, "親ロール", nil)
+		childRole := createRoleForRoleTest(t, db, "子ロール", &parentRole.ID)
 
 		t.Run("異常系: 子ロールが存在する場合", func(t *testing.T) {
 			err := svc.DeleteRole(parentRole.ID)
@@ -465,8 +465,8 @@ func TestRoleService_DeleteValidation(t *testing.T) {
 		})
 
 		t.Run("異常系: プライマリロールとして割り当て済み", func(t *testing.T) {
-			role := createTestRole(t, db, "プライマリロール", nil)
-			_ = createTestUser(t, db, "テストユーザー", "test@example.com", &role.ID)
+			role := createRoleForRoleTest(t, db, "プライマリロール", nil)
+			_ = createUserForRoleTest(t, db, "テストユーザー", "test@example.com", &role.ID)
 
 			err := svc.DeleteRole(role.ID)
 			assert.Error(t, err)
@@ -475,8 +475,8 @@ func TestRoleService_DeleteValidation(t *testing.T) {
 		})
 
 		t.Run("異常系: ユーザーロールとして割り当て済み", func(t *testing.T) {
-			role := createTestRole(t, db, "ユーザーロール", nil)
-			user := createTestUser(t, db, "テストユーザー2", "test2@example.com", nil)
+			role := createRoleForRoleTest(t, db, "ユーザーロール", nil)
+			user := createUserForRoleTest(t, db, "テストユーザー2", "test2@example.com", nil)
 
 			// ユーザーロール関係を作成
 			// UserIDを再取得してuser_rolesに挿入
@@ -514,13 +514,13 @@ func TestRoleService_PermissionInheritance(t *testing.T) {
 	t.Run("権限継承システム（基本構造）", func(t *testing.T) {
 		// 3階層のロール構造を作成
 		// 親ロール（レベル1）
-		parentRole := createTestRole(t, db, "管理者", nil)
+		parentRole := createRoleForRoleTest(t, db, "管理者", nil)
 
 		// 子ロール（レベル2）
-		childRole := createTestRole(t, db, "部署管理者", &parentRole.ID)
+		childRole := createRoleForRoleTest(t, db, "部署管理者", &parentRole.ID)
 
 		// 孫ロール（レベル3）
-		grandChildRole := createTestRole(t, db, "一般ユーザー", &childRole.ID)
+		grandChildRole := createRoleForRoleTest(t, db, "一般ユーザー", &childRole.ID)
 
 		t.Run("階層構造確認", func(t *testing.T) {
 			// 親ロールの詳細取得
@@ -581,7 +581,7 @@ func TestRoleService_PermissionInheritance(t *testing.T) {
 		})
 
 		t.Run("直接権限のみ", func(t *testing.T) {
-			perm := createTestPermission(t, db, "test", "action")
+			perm := createPermissionForRoleTest(t, db, "test", "action")
 
 			direct := []PermissionInfo{
 				{ID: perm.ID, Module: "test", Action: "action", Inherited: false},
@@ -594,7 +594,7 @@ func TestRoleService_PermissionInheritance(t *testing.T) {
 		})
 
 		t.Run("継承権限のみ", func(t *testing.T) {
-			perm := createTestPermission(t, db, "test2", "action2")
+			perm := createPermissionForRoleTest(t, db, "test2", "action2")
 
 			direct := []PermissionInfo{}
 			inherited := []InheritedPermissionInfo{
@@ -607,7 +607,7 @@ func TestRoleService_PermissionInheritance(t *testing.T) {
 		})
 
 		t.Run("重複排除", func(t *testing.T) {
-			perm := createTestPermission(t, db, "test3", "action3")
+			perm := createPermissionForRoleTest(t, db, "test3", "action3")
 
 			direct := []PermissionInfo{
 				{ID: perm.ID, Module: "test3", Action: "action3", Inherited: false},
@@ -638,15 +638,15 @@ func TestRoleService_HierarchyManagement(t *testing.T) {
 			ルート2
 			└── 子2-1
 		*/
-		root1 := createTestRole(t, db, "ルート1", nil)
-		root2 := createTestRole(t, db, "ルート2", nil)
+		root1 := createRoleForRoleTest(t, db, "ルート1", nil)
+		root2 := createRoleForRoleTest(t, db, "ルート2", nil)
 
-		child1_1 := createTestRole(t, db, "子1-1", &root1.ID)
-		child1_2 := createTestRole(t, db, "子1-2", &root1.ID)
-		_ = createTestRole(t, db, "子2-1", &root2.ID) // root2の子ロール
+		child1_1 := createRoleForRoleTest(t, db, "子1-1", &root1.ID)
+		child1_2 := createRoleForRoleTest(t, db, "子1-2", &root1.ID)
+		_ = createRoleForRoleTest(t, db, "子2-1", &root2.ID) // root2の子ロール
 
-		grandchild1_1_1 := createTestRole(t, db, "孫1-1-1", &child1_1.ID)
-		grandchild1_1_2 := createTestRole(t, db, "孫1-1-2", &child1_1.ID)
+		grandchild1_1_1 := createRoleForRoleTest(t, db, "孫1-1-1", &child1_1.ID)
+		grandchild1_1_2 := createRoleForRoleTest(t, db, "孫1-1-2", &child1_1.ID)
 
 		t.Run("階層ツリー取得", func(t *testing.T) {
 			hierarchy, err := svc.GetRoleHierarchy()
@@ -710,9 +710,9 @@ func TestRoleService_HierarchyManagement(t *testing.T) {
 	})
 
 	t.Run("レベル計算", func(t *testing.T) {
-		parent := createTestRole(t, db, "レベルテスト親", nil)
-		child := createTestRole(t, db, "レベルテスト子", &parent.ID)
-		grandchild := createTestRole(t, db, "レベルテスト孫", &child.ID)
+		parent := createRoleForRoleTest(t, db, "レベルテスト親", nil)
+		child := createRoleForRoleTest(t, db, "レベルテスト子", &parent.ID)
+		grandchild := createRoleForRoleTest(t, db, "レベルテスト孫", &child.ID)
 
 		level, err := svc.calculateLevel(parent.ID)
 		require.NoError(t, err)
@@ -748,7 +748,7 @@ func TestRoleService_CRUDOperations(t *testing.T) {
 
 		t.Run("正常系: 親ロール付きロール作成", func(t *testing.T) {
 			// 親ロール作成
-			parent := createTestRole(t, db, "親ロール", nil)
+			parent := createRoleForRoleTest(t, db, "親ロール", nil)
 
 			req := CreateRoleRequest{
 				Name:     "子ロール",
@@ -764,7 +764,7 @@ func TestRoleService_CRUDOperations(t *testing.T) {
 	})
 
 	t.Run("Read操作", func(t *testing.T) {
-		role := createTestRole(t, db, "読み取りテストロール", nil)
+		role := createRoleForRoleTest(t, db, "読み取りテストロール", nil)
 
 		t.Run("正常系: 存在するロール取得", func(t *testing.T) {
 			resp, err := svc.GetRole(role.ID)
@@ -782,7 +782,7 @@ func TestRoleService_CRUDOperations(t *testing.T) {
 	})
 
 	t.Run("Update操作", func(t *testing.T) {
-		role := createTestRole(t, db, "更新テストロール", nil)
+		role := createRoleForRoleTest(t, db, "更新テストロール", nil)
 
 		t.Run("正常系: ロール名更新", func(t *testing.T) {
 			newName := "更新後ロール名"
@@ -797,7 +797,7 @@ func TestRoleService_CRUDOperations(t *testing.T) {
 		})
 
 		t.Run("正常系: 親ロール設定", func(t *testing.T) {
-			parent := createTestRole(t, db, "新しい親ロール", nil)
+			parent := createRoleForRoleTest(t, db, "新しい親ロール", nil)
 			req := UpdateRoleRequest{
 				ParentID: &parent.ID,
 			}
@@ -823,7 +823,7 @@ func TestRoleService_CRUDOperations(t *testing.T) {
 
 	t.Run("Delete操作", func(t *testing.T) {
 		t.Run("正常系: 基本的なロール削除", func(t *testing.T) {
-			role := createTestRole(t, db, "削除テストロール", nil)
+			role := createRoleForRoleTest(t, db, "削除テストロール", nil)
 
 			err := svc.DeleteRole(role.ID)
 			require.NoError(t, err)
@@ -844,9 +844,9 @@ func TestRoleService_CRUDOperations(t *testing.T) {
 
 	t.Run("List操作", func(t *testing.T) {
 		// テストロールを複数作成
-		role1 := createTestRole(t, db, "リストテスト1", nil)
-		_ = createTestRole(t, db, "リストテスト2", nil)
-		child1 := createTestRole(t, db, "子ロール1", &role1.ID)
+		role1 := createRoleForRoleTest(t, db, "リストテスト1", nil)
+		_ = createRoleForRoleTest(t, db, "リストテスト2", nil)
+		child1 := createRoleForRoleTest(t, db, "子ロール1", &role1.ID)
 
 		t.Run("正常系: 全ロール取得", func(t *testing.T) {
 			resp, err := svc.GetRoles(1, 10, nil, nil, "")
@@ -883,7 +883,7 @@ func TestRoleService_PermissionManagement(t *testing.T) {
 	svc, db := setupTestRole(t)
 
 	t.Run("権限割り当て操作", func(t *testing.T) {
-		role := createTestRole(t, db, "権限テストロール", nil)
+		role := createRoleForRoleTest(t, db, "権限テストロール", nil)
 
 		t.Run("正常系: 空の権限割り当て", func(t *testing.T) {
 			req := AssignPermissionsRequest{
@@ -911,7 +911,7 @@ func TestRoleService_PermissionManagement(t *testing.T) {
 	})
 
 	t.Run("権限取得操作", func(t *testing.T) {
-		role := createTestRole(t, db, "権限取得テストロール", nil)
+		role := createRoleForRoleTest(t, db, "権限取得テストロール", nil)
 
 		t.Run("正常系: ロール権限取得", func(t *testing.T) {
 			resp, err := svc.GetRolePermissions(role.ID)
@@ -933,9 +933,9 @@ func TestRoleService_PermissionManagement(t *testing.T) {
 
 	t.Run("階層ツリー取得", func(t *testing.T) {
 		// 階層構造作成
-		root := createTestRole(t, db, "ツリールート", nil)
-		child := createTestRole(t, db, "ツリー子", &root.ID)
-		_ = createTestRole(t, db, "ツリー孫", &child.ID)
+		root := createRoleForRoleTest(t, db, "ツリールート", nil)
+		child := createRoleForRoleTest(t, db, "ツリー子", &root.ID)
+		_ = createRoleForRoleTest(t, db, "ツリー孫", &child.ID)
 
 		t.Run("正常系: 階層ツリー取得", func(t *testing.T) {
 			resp, err := svc.GetRoleHierarchy()
