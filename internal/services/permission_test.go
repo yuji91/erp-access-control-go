@@ -242,8 +242,8 @@ func TestPermissionService_UpdatePermission(t *testing.T) {
 
 	t.Run("正常系: 説明更新", func(t *testing.T) {
 		// テスト権限作成
-		permission := createPermissionForPermissionTest(t, db, "inventory", "delete")
-		newDescription := "更新された在庫削除権限"
+		permission := createPermissionForPermissionTest(t, db, "inventory", "create")
+		newDescription := "更新された在庫作成権限"
 
 		req := UpdatePermissionRequest{
 			Description: &newDescription,
