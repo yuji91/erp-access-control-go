@@ -14,7 +14,6 @@ type Role struct {
 	// リレーション
 	Parent           *Role             `gorm:"foreignKey:ParentID;constraint:OnDelete:SET NULL" json:"parent,omitempty"`
 	Children         []Role            `gorm:"foreignKey:ParentID" json:"children,omitempty"`
-	Users            []User            `gorm:"foreignKey:RoleID" json:"users,omitempty"` // 旧: 後方互換性
 	PrimaryUsers     []User            `gorm:"foreignKey:PrimaryRoleID" json:"primary_users,omitempty"`
 	UserRoles        []UserRole        `gorm:"foreignKey:RoleID" json:"user_roles,omitempty"`
 	Permissions      []Permission      `gorm:"many2many:role_permissions;constraint:OnDelete:CASCADE" json:"permissions,omitempty"`

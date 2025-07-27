@@ -16,7 +16,6 @@ type User struct {
 	Email          string     `gorm:"uniqueIndex;not null" json:"email"`
 	PasswordHash   string     `gorm:"not null" json:"-"` // パスワードハッシュ（JSONレスポンスから除外）
 	DepartmentID   uuid.UUID  `gorm:"type:uuid;not null;index" json:"department_id"`
-	RoleID         *uuid.UUID `gorm:"type:uuid;index" json:"role_id,omitempty"` // 旧: 後方互換性のため保持（段階的削除予定）
 	PrimaryRoleID  *uuid.UUID `gorm:"type:uuid;index" json:"primary_role_id,omitempty"` // メインロール
 	Status         UserStatus `gorm:"not null;default:'active';check:status IN ('active','inactive','suspended')" json:"status"`
 
@@ -27,7 +26,6 @@ type User struct {
 
 	// リレーション
 	Department       Department        `gorm:"foreignKey:DepartmentID;constraint:OnDelete:CASCADE" json:"department,omitempty"`
-	Role             *Role             `gorm:"foreignKey:RoleID;constraint:OnDelete:CASCADE" json:"role,omitempty"` // 旧: 後方互換性
 	PrimaryRole      *Role             `gorm:"foreignKey:PrimaryRoleID;constraint:OnDelete:SET NULL" json:"primary_role,omitempty"`
 	UserRoles        []UserRole        `gorm:"foreignKey:UserID" json:"user_roles,omitempty"`
 	ActiveUserRoles  []UserRole        `gorm:"foreignKey:UserID;->:false" json:"active_user_roles,omitempty"` // カスタムクエリ用
@@ -134,12 +132,6 @@ func (u *User) Suspend(db *gorm.DB) error {
 	return db.Save(u).Error
 }
 
-// ChangeRole ロールを変更（後方互換性）
-func (u *User) ChangeRole(db *gorm.DB, newRoleID uuid.UUID) error {
-	u.RoleID = &newRoleID
-	return db.Save(u).Error
-}
-
 // ChangePrimaryRole プライマリロールを変更
 func (u *User) ChangePrimaryRole(db *gorm.DB, newRoleID uuid.UUID) error {
 	u.PrimaryRoleID = &newRoleID
@@ -204,12 +196,7 @@ func (u *User) GetDepartmentUsers(db *gorm.DB) ([]User, error) {
 	return users, err
 }
 
-// GetRoleUsers 同じロールのユーザーを取得
-func (u *User) GetRoleUsers(db *gorm.DB) ([]User, error) {
-	var users []User
-	err := db.Where("role_id = ? AND id != ?", u.RoleID, u.ID).Find(&users).Error
-	return users, err
-}
+
 
 // =============================================================================
 // クエリ用ヘルパー関数
@@ -218,7 +205,7 @@ func (u *User) GetRoleUsers(db *gorm.DB) ([]User, error) {
 // FindUserByID IDでユーザーを検索
 func FindUserByID(db *gorm.DB, id uuid.UUID) (*User, error) {
 	var user User
-	err := db.Preload("Department").Preload("Role").Where("id = ?", id).First(&user).Error
+	err := db.Preload("Department").Preload("PrimaryRole").Where("id = ?", id).First(&user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +215,7 @@ func FindUserByID(db *gorm.DB, id uuid.UUID) (*User, error) {
 // FindUserByEmail メールアドレスでユーザーを検索
 func FindUserByEmail(db *gorm.DB, email string) (*User, error) {
 	var user User
-	err := db.Preload("Department").Preload("Role").Where("email = ?", email).First(&user).Error
+	err := db.Preload("Department").Preload("PrimaryRole").Where("email = ?", email).First(&user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -238,23 +225,17 @@ func FindUserByEmail(db *gorm.DB, email string) (*User, error) {
 // FindUsersByDepartment 部門でユーザーを検索
 func FindUsersByDepartment(db *gorm.DB, departmentID uuid.UUID) ([]User, error) {
 	var users []User
-	err := db.Preload("Department").Preload("Role").
+	err := db.Preload("Department").Preload("PrimaryRole").
 		Where("department_id = ?", departmentID).Find(&users).Error
 	return users, err
 }
 
-// FindUsersByRole ロールでユーザーを検索
-func FindUsersByRole(db *gorm.DB, roleID uuid.UUID) ([]User, error) {
-	var users []User
-	err := db.Preload("Department").Preload("Role").
-		Where("role_id = ?", roleID).Find(&users).Error
-	return users, err
-}
+
 
 // FindUsersByStatus ステータスでユーザーを検索
 func FindUsersByStatus(db *gorm.DB, status UserStatus) ([]User, error) {
 	var users []User
-	err := db.Preload("Department").Preload("Role").
+	err := db.Preload("Department").Preload("PrimaryRole").
 		Where("status = ?", status).Find(&users).Error
 	return users, err
 }
@@ -278,7 +259,7 @@ func FindSuspendedUsers(db *gorm.DB) ([]User, error) {
 func SearchUsers(db *gorm.DB, keyword string) ([]User, error) {
 	var users []User
 	searchPattern := "%" + keyword + "%"
-	err := db.Preload("Department").Preload("Role").
+	err := db.Preload("Department").Preload("PrimaryRole").
 		Where("name ILIKE ? OR email ILIKE ?", searchPattern, searchPattern).
 		Find(&users).Error
 	return users, err
