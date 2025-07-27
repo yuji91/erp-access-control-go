@@ -9,10 +9,11 @@ import (
 
 // Config アプリケーション全体の設定
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	Logger   LoggerConfig   `mapstructure:"logger"`
+	Environment string         `mapstructure:"environment"`
+	Server      ServerConfig   `mapstructure:"server"`
+	Database    DatabaseConfig `mapstructure:"database"`
+	JWT         JWTConfig      `mapstructure:"jwt"`
+	Logger      LoggerConfig   `mapstructure:"logger"`
 }
 
 // ServerConfig サーバー設定
@@ -38,10 +39,6 @@ type JWTConfig struct {
 	ExpiresIn           time.Duration `mapstructure:"expires_in"`
 	AccessTokenDuration time.Duration `mapstructure:"access_token_duration"`
 	Issuer              string        `mapstructure:"issuer"`
-	// TODO: セキュリティ強化
-	// - RSA公開鍵/秘密鍵方式への移行検討
-	// - アクセストークン(短期) + リフレッシュトークン(長期)分離
-	// - JWTアルゴリズムの明示的指定 (RS256推奨)
 }
 
 // LoggerConfig ログ設定
@@ -84,6 +81,9 @@ func Load() (*Config, error) {
 
 // setDefaults デフォルト設定値を設定
 func setDefaults() {
+	// Environment default
+	viper.SetDefault("environment", "development")
+
 	// Server defaults
 	viper.SetDefault("server.host", "localhost")
 	viper.SetDefault("server.port", "8080")
@@ -98,9 +98,8 @@ func setDefaults() {
 	viper.SetDefault("database.ssl_mode", "disable")
 
 	// JWT defaults
-	// TODO: セキュリティ改善 - 本番環境では必ず環境変数から読み込む
 	viper.SetDefault("jwt.secret", "your-super-secret-jwt-key-256-bits-long")
-	viper.SetDefault("jwt.expires_in", "24h") // TODO: 短縮検討 (15分推奨)
+	viper.SetDefault("jwt.expires_in", "24h")
 	viper.SetDefault("jwt.access_token_duration", "15m")
 	viper.SetDefault("jwt.issuer", "erp-access-control-api")
 
@@ -111,6 +110,9 @@ func setDefaults() {
 
 // bindEnvVariables 環境変数を設定キーにバインド
 func bindEnvVariables() {
+	// Environment
+	viper.BindEnv("environment", "APP_ENV")
+
 	// Server
 	viper.BindEnv("server.host", "SERVER_HOST")
 	viper.BindEnv("server.port", "SERVER_PORT")

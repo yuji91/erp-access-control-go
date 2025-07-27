@@ -12,12 +12,13 @@ import (
 // User ユーザーテーブル（複数ロール対応版）
 type User struct {
 	BaseModelWithUpdate
-	Name           string     `gorm:"not null" json:"name"`
-	Email          string     `gorm:"uniqueIndex;not null" json:"email"`
-	PasswordHash   string     `gorm:"not null" json:"-"` // パスワードハッシュ（JSONレスポンスから除外）
-	DepartmentID   uuid.UUID  `gorm:"type:uuid;not null;index" json:"department_id"`
-	PrimaryRoleID  *uuid.UUID `gorm:"type:uuid;index" json:"primary_role_id,omitempty"` // メインロール
-	Status         UserStatus `gorm:"not null;default:'active';check:status IN ('active','inactive','suspended')" json:"status"`
+	Name          string     `gorm:"not null" json:"name"`
+	Email         string     `gorm:"uniqueIndex;not null" json:"email"`
+	PasswordHash  string     `gorm:"not null" json:"-"` // パスワードハッシュ（JSONレスポンスから除外）
+	Password      string     `gorm:"-" json:"-"`        // パスワード（一時フィールド）
+	DepartmentID  uuid.UUID  `gorm:"type:uuid;not null;index" json:"department_id"`
+	PrimaryRoleID *uuid.UUID `gorm:"type:uuid;index" json:"primary_role_id,omitempty"` // メインロール
+	Status        UserStatus `gorm:"not null;default:'active';check:status IN ('active','inactive','suspended')" json:"status"`
 
 	// TODO: アーキテクチャ改善
 	// - パスワード強度追跡: PasswordSetAt, LastPasswordChange
@@ -52,6 +53,13 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 		return gorm.ErrInvalidValue
 	}
 
+	// パスワードのハッシュ化
+	if u.Password != "" {
+		if err := u.HashPassword(u.Password); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -65,6 +73,13 @@ func (u *User) BeforeUpdate(tx *gorm.DB) error {
 	// ステータスの妥当性チェック
 	if !ValidateUserStatus(u.Status) {
 		return gorm.ErrInvalidValue
+	}
+
+	// パスワードのハッシュ化
+	if u.Password != "" {
+		if err := u.HashPassword(u.Password); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -151,7 +166,7 @@ func (u *User) ChangeDepartment(db *gorm.DB, newDepartmentID uuid.UUID) error {
 // GetAllPermissions ユーザーの全権限を取得（複数ロール・階層考慮）
 func (u *User) GetAllPermissions(db *gorm.DB) ([]Permission, error) {
 	var permissions []Permission
-	
+
 	// 複数ロールからの権限集約クエリ
 	query := `
 		SELECT DISTINCT p.id, p.module, p.action, p.created_at
@@ -172,7 +187,7 @@ func (u *User) GetAllPermissions(db *gorm.DB) ([]Permission, error) {
 // HasPermission 特定の権限を持つかチェック（複数ロール対応）
 func (u *User) HasPermission(db *gorm.DB, module, action string) (bool, error) {
 	var count int64
-	
+
 	query := `
 		SELECT COUNT(DISTINCT p.id)
 		FROM permissions p
@@ -195,8 +210,6 @@ func (u *User) GetDepartmentUsers(db *gorm.DB) ([]User, error) {
 	err := db.Where("department_id = ? AND id != ?", u.DepartmentID, u.ID).Find(&users).Error
 	return users, err
 }
-
-
 
 // =============================================================================
 // クエリ用ヘルパー関数
@@ -229,8 +242,6 @@ func FindUsersByDepartment(db *gorm.DB, departmentID uuid.UUID) ([]User, error) 
 		Where("department_id = ?", departmentID).Find(&users).Error
 	return users, err
 }
-
-
 
 // FindUsersByStatus ステータスでユーザーを検索
 func FindUsersByStatus(db *gorm.DB, status UserStatus) ([]User, error) {
@@ -305,26 +316,26 @@ func GetUsersWithPermissionView(db *gorm.DB, module, action string) ([]map[strin
 // GetActiveRoles アクティブなロールを取得
 func (u *User) GetActiveRoles(db *gorm.DB) ([]Role, error) {
 	var roles []Role
-	
+
 	err := db.Joins("JOIN user_roles ur ON roles.id = ur.role_id").
-		Where("ur.user_id = ? AND ur.is_active = ? AND ur.valid_from <= ? AND (ur.valid_to IS NULL OR ur.valid_to > ?)", 
-			  u.ID, true, time.Now(), time.Now()).
+		Where("ur.user_id = ? AND ur.is_active = ? AND ur.valid_from <= ? AND (ur.valid_to IS NULL OR ur.valid_to > ?)",
+			u.ID, true, time.Now(), time.Now()).
 		Order("ur.priority DESC, ur.created_at ASC").
 		Find(&roles).Error
-	
+
 	return roles, err
 }
 
 // GetHighestPriorityRole 最高優先度のロールを取得
 func (u *User) GetHighestPriorityRole(db *gorm.DB) (*Role, error) {
 	var role Role
-	
+
 	err := db.Joins("JOIN user_roles ur ON roles.id = ur.role_id").
-		Where("ur.user_id = ? AND ur.is_active = ? AND ur.valid_from <= ? AND (ur.valid_to IS NULL OR ur.valid_to > ?)", 
-			  u.ID, true, time.Now(), time.Now()).
+		Where("ur.user_id = ? AND ur.is_active = ? AND ur.valid_from <= ? AND (ur.valid_to IS NULL OR ur.valid_to > ?)",
+			u.ID, true, time.Now(), time.Now()).
 		Order("ur.priority DESC, ur.created_at ASC").
 		First(&role).Error
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +354,7 @@ func (u *User) AssignRole(db *gorm.DB, roleID uuid.UUID, validFrom time.Time, va
 		AssignedBy:     &assignedBy,
 		AssignedReason: reason,
 	}
-	
+
 	return db.Create(&userRole).Error
 }
 
@@ -388,24 +399,24 @@ func (u *User) ExtendRole(db *gorm.DB, roleID uuid.UUID, newValidTo *time.Time, 
 func (u *User) HasRoleActive(db *gorm.DB, roleID uuid.UUID) (bool, error) {
 	var count int64
 	now := time.Now()
-	
+
 	err := db.Model(&UserRole{}).
-		Where("user_id = ? AND role_id = ? AND is_active = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to > ?)", 
-			  u.ID, roleID, true, now, now).
+		Where("user_id = ? AND role_id = ? AND is_active = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to > ?)",
+			u.ID, roleID, true, now, now).
 		Count(&count).Error
-	
+
 	return count > 0, err
 }
 
 // GetUserRoles ユーザーの全ロール（アクティブ・非アクティブ含む）を取得
 func (u *User) GetUserRoles(db *gorm.DB) ([]UserRole, error) {
 	var userRoles []UserRole
-	
+
 	err := db.Preload("Role").Preload("AssignedByUser").
 		Where("user_id = ?", u.ID).
 		Order("priority DESC, created_at ASC").
 		Find(&userRoles).Error
-	
+
 	return userRoles, err
 }
 

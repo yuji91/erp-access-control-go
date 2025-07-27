@@ -14,6 +14,7 @@ import (
 	"erp-access-control-go/internal/middleware"
 	"erp-access-control-go/internal/services"
 	"erp-access-control-go/pkg/jwt"
+	"erp-access-control-go/pkg/logger"
 )
 
 func main() {
@@ -22,6 +23,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ 設定読み込みエラー: %v", err)
 	}
+
+	// ロガー初期化
+	appLogger := initLogger(cfg)
 
 	// データベース接続
 	db, err := initDatabase(cfg)
@@ -33,13 +37,31 @@ func main() {
 	services := initServices(db, cfg)
 
 	// ミドルウェア初期化
-	middlewares := initMiddlewares(services)
+	middlewares := initMiddlewares(services, appLogger)
 
 	// Ginルーター初期化
-	router := setupRoutes(services, middlewares)
+	router := setupRoutes(services, middlewares, appLogger)
 
 	// サーバー起動
 	startServer(router, cfg.Server.Port)
+}
+
+// initLogger ロガーを初期化
+func initLogger(cfg *config.Config) *logger.Logger {
+	var minLevel logger.LogLevel
+	switch cfg.Environment {
+	case "production":
+		minLevel = logger.WARN
+	case "staging":
+		minLevel = logger.INFO
+	default:
+		minLevel = logger.DEBUG
+	}
+
+	return logger.NewLogger(
+		logger.WithMinLevel(minLevel),
+		logger.WithEnvironment(cfg.Environment),
+	)
 }
 
 // initDatabase データベース接続を初期化
@@ -73,19 +95,20 @@ func initServices(db *gorm.DB, cfg *config.Config) *ServiceContainer {
 	)
 
 	return &ServiceContainer{
-		Auth:        authService,
-		Permission:  permissionService,
-		Revocation:  revocationService,
-		UserRole:    userRoleService,
-		JWT:         jwtService,
+		Auth:       authService,
+		Permission: permissionService,
+		Revocation: revocationService,
+		UserRole:   userRoleService,
+		JWT:        jwtService,
 	}
 }
 
 // initMiddlewares ミドルウェアを初期化
-func initMiddlewares(services *ServiceContainer) *MiddlewareContainer {
+func initMiddlewares(services *ServiceContainer, appLogger *logger.Logger) *MiddlewareContainer {
 	authMiddleware := middleware.NewAuthMiddleware(
 		services.JWT,
 		services.Revocation,
+		appLogger,
 	)
 
 	return &MiddlewareContainer{
@@ -94,23 +117,26 @@ func initMiddlewares(services *ServiceContainer) *MiddlewareContainer {
 }
 
 // setupRoutes ルーティングを設定
-func setupRoutes(services *ServiceContainer, middlewares *MiddlewareContainer) *gin.Engine {
+func setupRoutes(services *ServiceContainer, middlewares *MiddlewareContainer, appLogger *logger.Logger) *gin.Engine {
 	// 開発モード設定
 	gin.SetMode(gin.DebugMode)
 
 	router := gin.Default()
+
+	// エラーハンドリングミドルウェア
+	router.Use(middleware.ErrorHandler(appLogger))
 
 	// CORS設定（開発用）
 	router.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
-		
+
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
 		}
-		
+
 		c.Next()
 	})
 
@@ -121,7 +147,7 @@ func setupRoutes(services *ServiceContainer, middlewares *MiddlewareContainer) *
 	v1 := router.Group("/api/v1")
 	{
 		// 認証エンドポイント
-		setupAuthRoutes(v1, services.Auth, middlewares)
+		setupAuthRoutes(v1, services.Auth, middlewares, appLogger)
 
 		// 認証が必要なエンドポイント
 		protected := v1.Group("")
@@ -184,16 +210,16 @@ func setupBasicRoutes(router *gin.Engine) {
 }
 
 // setupAuthRoutes 認証エンドポイントを設定
-func setupAuthRoutes(group *gin.RouterGroup, authService *services.AuthService, middlewares *MiddlewareContainer) {
-	authHandler := handlers.NewAuthHandler(authService)
-	
+func setupAuthRoutes(group *gin.RouterGroup, authService *services.AuthService, middlewares *MiddlewareContainer, appLogger *logger.Logger) {
+	authHandler := handlers.NewAuthHandler(authService, appLogger)
+
 	auth := group.Group("/auth")
 	{
 		// 認証不要エンドポイント
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/refresh", authHandler.RefreshToken)
 		auth.POST("/logout", authHandler.Logout)
-		
+
 		// 認証必要エンドポイント
 		protected := auth.Group("")
 		protected.Use(middlewares.Auth.Authentication())

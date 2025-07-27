@@ -37,9 +37,9 @@ type AssignRoleRequest struct {
 
 // UpdateRoleRequest ロール更新リクエスト
 type UpdateRoleRequest struct {
-	Priority  *int       `json:"priority,omitempty" binding:"omitempty,min=1"`
-	ValidTo   *time.Time `json:"valid_to,omitempty"`
-	Reason    string     `json:"reason,omitempty"`
+	Priority *int       `json:"priority,omitempty" binding:"omitempty,min=1"`
+	ValidTo  *time.Time `json:"valid_to,omitempty"`
+	Reason   string     `json:"reason,omitempty"`
 }
 
 // UserRoleResponse ユーザーロールレスポンス
@@ -59,29 +59,17 @@ type UserRoleResponse struct {
 }
 
 // AssignRole ユーザーにロールを割り当て
-// @Summary ユーザーロール割り当て
-// @Description ユーザーに新しいロールを割り当てます（期限・優先度指定可能）
-// @Tags UserRoles
-// @Accept json
-// @Produce json
-// @Param request body AssignRoleRequest true "ロール割り当て情報"
-// @Success 201 {object} UserRoleResponse
-// @Failure 400 {object} errors.APIError
-// @Failure 401 {object} errors.APIError
-// @Failure 403 {object} errors.APIError
-// @Failure 500 {object} errors.APIError
-// @Router /api/v1/users/roles [post]
 func (h *UserRoleHandler) AssignRole(c *gin.Context) {
 	var req AssignRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError(err))
+		c.Error(errors.NewValidationError("request", "Invalid request format"))
 		return
 	}
 
 	// リクエストユーザーID取得
 	assignedBy, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, errors.ErrUnauthorized)
+		c.Error(errors.NewAuthenticationError("Authentication required"))
 		return
 	}
 
@@ -104,7 +92,7 @@ func (h *UserRoleHandler) AssignRole(c *gin.Context) {
 		req.Reason,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
+		c.Error(err)
 		return
 	}
 
@@ -113,41 +101,26 @@ func (h *UserRoleHandler) AssignRole(c *gin.Context) {
 }
 
 // RevokeRole ユーザーのロールを取り消し
-// @Summary ユーザーロール取り消し
-// @Description ユーザーの指定ロールを取り消します
-// @Tags UserRoles
-// @Accept json
-// @Produce json
-// @Param user_id path string true "ユーザーID"
-// @Param role_id path string true "ロールID"
-// @Param reason body string false "取り消し理由"
-// @Success 200 {object} UserRoleResponse
-// @Failure 400 {object} errors.APIError
-// @Failure 401 {object} errors.APIError
-// @Failure 403 {object} errors.APIError
-// @Failure 404 {object} errors.APIError
-// @Failure 500 {object} errors.APIError
-// @Router /api/v1/users/{user_id}/roles/{role_id} [delete]
 func (h *UserRoleHandler) RevokeRole(c *gin.Context) {
 	userIDStr := c.Param("user_id")
 	roleIDStr := c.Param("role_id")
 
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError(err))
+		c.Error(errors.NewValidationError("user_id", "Invalid UUID format"))
 		return
 	}
 
 	roleID, err := uuid.Parse(roleIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError(err))
+		c.Error(errors.NewValidationError("role_id", "Invalid UUID format"))
 		return
 	}
 
 	// リクエストユーザーID取得
 	revokedBy, err := middleware.GetCurrentUserID(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, errors.ErrUnauthorized)
+		c.Error(errors.NewAuthenticationError("Authentication required"))
 		return
 	}
 
@@ -167,7 +140,7 @@ func (h *UserRoleHandler) RevokeRole(c *gin.Context) {
 		reason,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
+		c.Error(err)
 		return
 	}
 
@@ -176,47 +149,32 @@ func (h *UserRoleHandler) RevokeRole(c *gin.Context) {
 }
 
 // UpdateRole ユーザーロールを更新
-// @Summary ユーザーロール更新
-// @Description ユーザーロールの優先度や期限を更新します
-// @Tags UserRoles
-// @Accept json
-// @Produce json
-// @Param user_id path string true "ユーザーID"
-// @Param role_id path string true "ロールID"
-// @Param request body UpdateRoleRequest true "更新情報"
-// @Success 200 {object} UserRoleResponse
-// @Failure 400 {object} errors.APIError
-// @Failure 401 {object} errors.APIError
-// @Failure 403 {object} errors.APIError
-// @Failure 404 {object} errors.APIError
-// @Failure 500 {object} errors.APIError
-// @Router /api/v1/users/{user_id}/roles/{role_id} [patch]
 func (h *UserRoleHandler) UpdateRole(c *gin.Context) {
 	userIDStr := c.Param("user_id")
 	roleIDStr := c.Param("role_id")
 
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError(err))
+		c.Error(errors.NewValidationError("user_id", "Invalid UUID format"))
 		return
 	}
 
 	roleID, err := uuid.Parse(roleIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError(err))
+		c.Error(errors.NewValidationError("role_id", "Invalid UUID format"))
 		return
 	}
 
 	var req UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError(err))
+		c.Error(errors.NewValidationError("request", "Invalid request format"))
 		return
 	}
 
 	// リクエストユーザーID取得
 	updatedBy, err := middleware.GetCurrentUserID(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, errors.ErrUnauthorized)
+		c.Error(errors.NewAuthenticationError("Authentication required"))
 		return
 	}
 
@@ -229,7 +187,7 @@ func (h *UserRoleHandler) UpdateRole(c *gin.Context) {
 		req.Reason,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
+		c.Error(err)
 		return
 	}
 
@@ -238,26 +196,13 @@ func (h *UserRoleHandler) UpdateRole(c *gin.Context) {
 }
 
 // GetUserRoles ユーザーのロール一覧を取得
-// @Summary ユーザーロール一覧取得
-// @Description 指定ユーザーのロール一覧を取得します
-// @Tags UserRoles
-// @Produce json
-// @Param user_id path string true "ユーザーID"
-// @Param active query bool false "アクティブなロールのみ取得"
-// @Success 200 {array} UserRoleResponse
-// @Failure 400 {object} errors.APIError
-// @Failure 401 {object} errors.APIError
-// @Failure 403 {object} errors.APIError
-// @Failure 404 {object} errors.APIError
-// @Failure 500 {object} errors.APIError
-// @Router /api/v1/users/{user_id}/roles [get]
 func (h *UserRoleHandler) GetUserRoles(c *gin.Context) {
 	userIDStr := c.Param("user_id")
 	activeOnly := c.Query("active") == "true"
 
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError(err))
+		c.Error(errors.NewValidationError("user_id", "Invalid UUID format"))
 		return
 	}
 
@@ -269,7 +214,7 @@ func (h *UserRoleHandler) GetUserRoles(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
+		c.Error(err)
 		return
 	}
 
@@ -302,4 +247,4 @@ func (h *UserRoleHandler) convertToResponse(userRole *models.UserRole) UserRoleR
 		CreatedAt:      userRole.CreatedAt,
 		UpdatedAt:      userRole.UpdatedAt,
 	}
-} 
+}

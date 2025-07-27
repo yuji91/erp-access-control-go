@@ -35,7 +35,7 @@ func (s *UserRoleService) AssignRole(
 	var user models.User
 	if err := s.db.First(&user, userID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("user not found")
+			return nil, errors.NewNotFoundError("User", "User does not exist")
 		}
 		return nil, errors.NewDatabaseError(err)
 	}
@@ -44,7 +44,7 @@ func (s *UserRoleService) AssignRole(
 	var role models.Role
 	if err := s.db.First(&role, roleID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("role not found")
+			return nil, errors.NewNotFoundError("Role", "Role does not exist")
 		}
 		return nil, errors.NewDatabaseError(err)
 	}
@@ -58,7 +58,7 @@ func (s *UserRoleService) AssignRole(
 		return nil, errors.NewDatabaseError(err)
 	}
 	if count > 0 {
-		return nil, errors.NewValidationError("user already has this role assigned")
+		return nil, errors.NewValidationError("role", "User already has this role assigned")
 	}
 
 	// UserRoleを作成
@@ -92,14 +92,14 @@ func (s *UserRoleService) RevokeRole(
 	reason string,
 ) (*models.UserRole, error) {
 	var userRole models.UserRole
-	
+
 	// アクティブなUserRoleを検索
 	err := s.db.Preload("Role").
 		Where("user_id = ? AND role_id = ? AND is_active = ?", userID, roleID, true).
 		First(&userRole).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("active user role not found")
+			return nil, errors.NewNotFoundError("UserRole", "Active user role not found")
 		}
 		return nil, errors.NewDatabaseError(err)
 	}
@@ -127,14 +127,14 @@ func (s *UserRoleService) UpdateRole(
 	reason string,
 ) (*models.UserRole, error) {
 	var userRole models.UserRole
-	
+
 	// アクティブなUserRoleを検索
 	err := s.db.Preload("Role").
 		Where("user_id = ? AND role_id = ? AND is_active = ?", userID, roleID, true).
 		First(&userRole).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("active user role not found")
+			return nil, errors.NewNotFoundError("UserRole", "Active user role not found")
 		}
 		return nil, errors.NewDatabaseError(err)
 	}
@@ -169,7 +169,7 @@ func (s *UserRoleService) UpdateRole(
 // GetUserRoles ユーザーのロール一覧を取得（全て）
 func (s *UserRoleService) GetUserRoles(userID uuid.UUID) ([]models.UserRole, error) {
 	var userRoles []models.UserRole
-	
+
 	err := s.db.Preload("Role").
 		Where("user_id = ?", userID).
 		Order("priority DESC, created_at ASC").
@@ -184,9 +184,9 @@ func (s *UserRoleService) GetUserRoles(userID uuid.UUID) ([]models.UserRole, err
 // GetActiveUserRoles ユーザーのアクティブロール一覧を取得
 func (s *UserRoleService) GetActiveUserRoles(userID uuid.UUID) ([]models.UserRole, error) {
 	var userRoles []models.UserRole
-	
+
 	err := s.db.Preload("Role").
-		Where("user_id = ? AND is_active = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to > ?)", 
+		Where("user_id = ? AND is_active = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to > ?)",
 			userID, true, time.Now(), time.Now()).
 		Order("priority DESC, created_at ASC").
 		Find(&userRoles).Error
@@ -200,13 +200,13 @@ func (s *UserRoleService) GetActiveUserRoles(userID uuid.UUID) ([]models.UserRol
 // GetUserRole 特定のUserRoleを取得
 func (s *UserRoleService) GetUserRole(userID, roleID uuid.UUID) (*models.UserRole, error) {
 	var userRole models.UserRole
-	
+
 	err := s.db.Preload("Role").
 		Where("user_id = ? AND role_id = ?", userID, roleID).
 		First(&userRole).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("user role not found")
+			return nil, errors.NewNotFoundError("UserRole", "User role not found")
 		}
 		return nil, errors.NewDatabaseError(err)
 	}
@@ -222,14 +222,14 @@ func (s *UserRoleService) ExtendRole(
 	reason string,
 ) (*models.UserRole, error) {
 	var userRole models.UserRole
-	
+
 	// アクティブなUserRoleを検索
 	err := s.db.Preload("Role").
 		Where("user_id = ? AND role_id = ? AND is_active = ?", userID, roleID, true).
 		First(&userRole).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("active user role not found")
+			return nil, errors.NewNotFoundError("UserRole", "Active user role not found")
 		}
 		return nil, errors.NewDatabaseError(err)
 	}
@@ -254,14 +254,14 @@ func (s *UserRoleService) UpdatePriority(
 	reason string,
 ) (*models.UserRole, error) {
 	var userRole models.UserRole
-	
+
 	// アクティブなUserRoleを検索
 	err := s.db.Preload("Role").
 		Where("user_id = ? AND role_id = ? AND is_active = ?", userID, roleID, true).
 		First(&userRole).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("active user role not found")
+			return nil, errors.NewNotFoundError("UserRole", "Active user role not found")
 		}
 		return nil, errors.NewDatabaseError(err)
 	}
@@ -281,7 +281,7 @@ func (s *UserRoleService) UpdatePriority(
 // CleanupExpiredRoles 期限切れロールの自動無効化
 func (s *UserRoleService) CleanupExpiredRoles() error {
 	now := time.Now()
-	
+
 	err := s.db.Model(&models.UserRole{}).
 		Where("is_active = ? AND valid_to IS NOT NULL AND valid_to < ?", true, now).
 		Updates(map[string]interface{}{
@@ -289,7 +289,7 @@ func (s *UserRoleService) CleanupExpiredRoles() error {
 			"assigned_reason": "auto_expired",
 			"updated_at":      now,
 		}).Error
-	
+
 	if err != nil {
 		return errors.NewDatabaseError(err)
 	}
@@ -311,7 +311,7 @@ func (s *UserRoleService) GetUserRoleStats(userID uuid.UUID) (map[string]int, er
 	// アクティブロール数
 	var activeCount int64
 	if err := s.db.Model(&models.UserRole{}).
-		Where("user_id = ? AND is_active = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to > ?)", 
+		Where("user_id = ? AND is_active = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to > ?)",
 			userID, true, time.Now(), time.Now()).
 		Count(&activeCount).Error; err != nil {
 		return nil, errors.NewDatabaseError(err)
@@ -321,7 +321,7 @@ func (s *UserRoleService) GetUserRoleStats(userID uuid.UUID) (map[string]int, er
 	// 期限切れロール数
 	var expiredCount int64
 	if err := s.db.Model(&models.UserRole{}).
-		Where("user_id = ? AND is_active = ? AND valid_to IS NOT NULL AND valid_to < ?", 
+		Where("user_id = ? AND is_active = ? AND valid_to IS NOT NULL AND valid_to < ?",
 			userID, true, time.Now()).
 		Count(&expiredCount).Error; err != nil {
 		return nil, errors.NewDatabaseError(err)
@@ -329,4 +329,4 @@ func (s *UserRoleService) GetUserRoleStats(userID uuid.UUID) (map[string]int, er
 	stats["expired"] = int(expiredCount)
 
 	return stats, nil
-} 
+}

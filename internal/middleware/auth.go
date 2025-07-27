@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
+	"runtime/debug"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -10,70 +12,149 @@ import (
 	"erp-access-control-go/internal/services"
 	"erp-access-control-go/pkg/errors"
 	"erp-access-control-go/pkg/jwt"
+	"erp-access-control-go/pkg/logger"
 )
 
 // AuthMiddleware JWT認証ミドルウェア
 type AuthMiddleware struct {
 	jwtService        *jwt.Service
 	revocationService *services.TokenRevocationService
+	logger            *logger.Logger
 }
 
 // NewAuthMiddleware 新しい認証ミドルウェアを作成
-func NewAuthMiddleware(jwtService *jwt.Service, revocationService *services.TokenRevocationService) *AuthMiddleware {
+func NewAuthMiddleware(jwtService *jwt.Service, revocationService *services.TokenRevocationService, logger *logger.Logger) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtService:        jwtService,
 		revocationService: revocationService,
+		logger:            logger,
+	}
+}
+
+// ErrorHandler エラーハンドリングミドルウェア
+func ErrorHandler(log *logger.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// パニックリカバリー
+		defer func() {
+			if err := recover(); err != nil {
+				// スタックトレースの取得
+				stack := string(debug.Stack())
+
+				// エラーログの出力
+				log.Error("Panic recovered", fmt.Errorf("%v", err), map[string]interface{}{
+					"stack_trace": stack,
+					"path":        c.Request.URL.Path,
+					"method":      c.Request.Method,
+				})
+
+				// クライアントへのレスポンス
+				c.JSON(http.StatusInternalServerError, errors.NewInternalError("An unexpected error occurred"))
+				c.Abort()
+			}
+		}()
+
+		c.Next()
+
+		// エラーハンドリング
+		if len(c.Errors) > 0 {
+			err := c.Errors.Last().Err
+			var apiErr *errors.APIError
+
+			// エラー種別の判定
+			switch {
+			case errors.IsAuthenticationError(err):
+				apiErr = err.(*errors.APIError)
+				log.Warn("Authentication error", map[string]interface{}{
+					"error": apiErr.Error(),
+					"path":  c.Request.URL.Path,
+				})
+			case errors.IsAuthorizationError(err):
+				apiErr = err.(*errors.APIError)
+				log.Warn("Authorization error", map[string]interface{}{
+					"error": apiErr.Error(),
+					"path":  c.Request.URL.Path,
+				})
+			case errors.IsValidationError(err):
+				apiErr = err.(*errors.APIError)
+				log.Info("Validation error", map[string]interface{}{
+					"error": apiErr.Error(),
+					"path":  c.Request.URL.Path,
+				})
+			default:
+				// 未知のエラーは内部エラーとして処理
+				apiErr = errors.NewInternalError(err.Error())
+				log.Error("Internal error", err, map[string]interface{}{
+					"path": c.Request.URL.Path,
+				})
+			}
+
+			c.JSON(apiErr.Status, apiErr)
+			c.Abort()
+		}
 	}
 }
 
 // Authentication JWTトークンを検証してユーザーコンテキストを設定
 func (m *AuthMiddleware) Authentication() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// TODO: セキュリティ強化
-		// - リクエストレート制限 (IP/ユーザー別)
-		// - 異常検知 (同一トークンの大量リクエスト)
-		// - トークン使用状況の監視とアラート
-		// - CORS設定の厳格化
-
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			// TODO: 不正アクセス試行のログ記録
-			c.JSON(http.StatusUnauthorized, errors.ErrInvalidToken)
-			c.Abort()
+			m.logger.Warn("Missing authorization header", map[string]interface{}{
+				"path": c.Request.URL.Path,
+				"ip":   c.ClientIP(),
+			})
+			c.Error(errors.ErrInvalidToken)
 			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
-			c.JSON(http.StatusUnauthorized, errors.ErrInvalidToken)
-			c.Abort()
+			m.logger.Warn("Invalid token format", map[string]interface{}{
+				"path": c.Request.URL.Path,
+				"ip":   c.ClientIP(),
+			})
+			c.Error(errors.ErrInvalidToken)
 			return
 		}
 
 		claims, err := m.jwtService.ValidateToken(tokenString)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, errors.ErrInvalidToken)
-			c.Abort()
+			m.logger.Warn("Token validation failed", map[string]interface{}{
+				"error": err.Error(),
+				"path":  c.Request.URL.Path,
+				"ip":    c.ClientIP(),
+			})
+			c.Error(errors.ErrInvalidToken)
 			return
 		}
 
-		// Check if token is revoked
+		// トークンの失効確認
 		if err := m.revocationService.ValidateTokenStatus(claims.ID, claims.UserID, claims.IssuedAt.Time); err != nil {
-			c.JSON(http.StatusUnauthorized, errors.ErrInvalidToken)
-			c.Abort()
+			m.logger.Warn("Token revoked", map[string]interface{}{
+				"token_id": claims.ID,
+				"user_id":  claims.UserID,
+				"path":     c.Request.URL.Path,
+			})
+			c.Error(errors.ErrTokenRevoked)
 			return
 		}
 
-		// Store user information in context（複数ロール対応）
+		// ユーザー情報をコンテキストに保存
 		c.Set("user_id", claims.UserID)
 		c.Set("email", claims.Email)
 		c.Set("permissions", claims.Permissions)
 		c.Set("jti", claims.ID)
-		
-		// 複数ロール情報をコンテキストに保存
 		c.Set("primary_role_id", claims.PrimaryRoleID)
 		c.Set("active_roles", claims.ActiveRoles)
 		c.Set("highest_role", claims.HighestRole)
+
+		// アクセスログ
+		m.logger.Info("Authenticated request", map[string]interface{}{
+			"user_id": claims.UserID,
+			"email":   claims.Email,
+			"path":    c.Request.URL.Path,
+			"method":  c.Request.Method,
+		})
 
 		c.Next()
 	}
@@ -84,22 +165,19 @@ func RequirePermissions(permissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userPerms, exists := c.Get("permissions")
 		if !exists {
-			c.JSON(http.StatusForbidden, errors.ErrPermissionDenied)
-			c.Abort()
+			c.Error(errors.ErrPermissionDenied)
 			return
 		}
 
 		userPermissions, ok := userPerms.([]string)
 		if !ok {
-			c.JSON(http.StatusForbidden, errors.ErrPermissionDenied)
-			c.Abort()
+			c.Error(errors.ErrPermissionDenied)
 			return
 		}
 
 		for _, requiredPerm := range permissions {
 			if !hasPermission(userPermissions, requiredPerm) {
-				c.JSON(http.StatusForbidden, errors.ErrPermissionDenied)
-				c.Abort()
+				c.Error(errors.NewAuthorizationError(fmt.Sprintf("Missing required permission: %s", requiredPerm)))
 				return
 			}
 		}
@@ -113,15 +191,13 @@ func RequireAnyPermission(permissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userPerms, exists := c.Get("permissions")
 		if !exists {
-			c.JSON(http.StatusForbidden, errors.ErrPermissionDenied)
-			c.Abort()
+			c.Error(errors.ErrPermissionDenied)
 			return
 		}
 
 		userPermissions, ok := userPerms.([]string)
 		if !ok {
-			c.JSON(http.StatusForbidden, errors.ErrPermissionDenied)
-			c.Abort()
+			c.Error(errors.ErrPermissionDenied)
 			return
 		}
 
@@ -132,8 +208,7 @@ func RequireAnyPermission(permissions ...string) gin.HandlerFunc {
 			}
 		}
 
-		c.JSON(http.StatusForbidden, errors.ErrPermissionDenied)
-		c.Abort()
+		c.Error(errors.NewAuthorizationError(fmt.Sprintf("Missing any of required permissions: %s", strings.Join(permissions, ", "))))
 	}
 }
 
@@ -142,37 +217,30 @@ func RequireOwnership() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, exists := c.Get("user_id")
 		if !exists {
-			c.JSON(http.StatusForbidden, errors.ErrPermissionDenied)
-			c.Abort()
+			c.Error(errors.ErrPermissionDenied)
 			return
 		}
 
 		currentUserID, ok := userID.(uuid.UUID)
 		if !ok {
-			c.JSON(http.StatusForbidden, errors.ErrPermissionDenied)
-			c.Abort()
+			c.Error(errors.ErrPermissionDenied)
 			return
 		}
 
-		// Get resource owner ID from URL parameter
 		resourceUserID := c.Param("user_id")
 		if resourceUserID == "" {
-			c.JSON(http.StatusBadRequest, errors.NewValidationError("user_id", "missing user ID parameter"))
-			c.Abort()
+			c.Error(errors.NewValidationError("user_id", "missing user ID parameter"))
 			return
 		}
 
 		resourceUserUUID, err := uuid.Parse(resourceUserID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, errors.NewValidationError("user_id", "invalid user ID format"))
-			c.Abort()
+			c.Error(errors.NewValidationError("user_id", "invalid user ID format"))
 			return
 		}
 
-		// Check if current user is the owner
 		if currentUserID != resourceUserUUID {
-			c.JSON(http.StatusForbidden, errors.ErrPermissionDenied)
-			c.Abort()
+			c.Error(errors.NewAuthorizationError("You do not have permission to access this resource"))
 			return
 		}
 
@@ -184,12 +252,12 @@ func RequireOwnership() gin.HandlerFunc {
 func GetCurrentUserID(c *gin.Context) (uuid.UUID, error) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		return uuid.Nil, errors.NewAuthenticationError("user not authenticated")
+		return uuid.Nil, errors.NewAuthenticationError("User not authenticated")
 	}
 
 	currentUserID, ok := userID.(uuid.UUID)
 	if !ok {
-		return uuid.Nil, errors.NewAuthenticationError("invalid user ID in context")
+		return uuid.Nil, errors.NewAuthenticationError("Invalid user ID in context")
 	}
 
 	return currentUserID, nil
@@ -199,12 +267,12 @@ func GetCurrentUserID(c *gin.Context) (uuid.UUID, error) {
 func GetCurrentUserEmail(c *gin.Context) (string, error) {
 	email, exists := c.Get("email")
 	if !exists {
-		return "", errors.NewAuthenticationError("user email not found in context")
+		return "", errors.NewAuthenticationError("User email not found in context")
 	}
 
 	userEmail, ok := email.(string)
 	if !ok {
-		return "", errors.NewAuthenticationError("invalid email in context")
+		return "", errors.NewAuthenticationError("Invalid email in context")
 	}
 
 	return userEmail, nil
@@ -214,12 +282,12 @@ func GetCurrentUserEmail(c *gin.Context) (string, error) {
 func GetCurrentUserPermissions(c *gin.Context) ([]string, error) {
 	perms, exists := c.Get("permissions")
 	if !exists {
-		return nil, errors.NewAuthenticationError("permissions not found in context")
+		return nil, errors.NewAuthenticationError("Permissions not found in context")
 	}
 
 	permissions, ok := perms.([]string)
 	if !ok {
-		return nil, errors.NewAuthenticationError("invalid permissions in context")
+		return nil, errors.NewAuthenticationError("Invalid permissions in context")
 	}
 
 	return permissions, nil

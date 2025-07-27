@@ -1,66 +1,212 @@
 package logger
 
-// TODO: 構造化ログシステム実装
-// この基本実装は開発用です。本番環境では以下の改善が必要です：
-//
-// 🔧 技術実装:
-// - uber-go/zap による高性能構造化ログ
-// - ログレベル動的変更機能
-// - JSON/Console フォーマット切り替え
-// - ログローテーション (サイズ・日付ベース)
-// - 非同期ログ出力によるパフォーマンス向上
-//
-// 📊 監査・セキュリティ:
-// - 認証・認可イベントの詳細ログ
-// - API アクセスログ (リクエスト/レスポンス、実行時間)
-// - セキュリティインシデント自動検知
-// - 不正アクセス試行の追跡・アラート
-//
-// 🔍 運用監視:
-// - エラー発生時のスタックトレース詳細記録
-// - パフォーマンスメトリクス (レスポンス時間、スループット)
-// - 外部ログ管理システム連携 (ELK Stack, Splunk)
-// - ログ集約・検索・可視化ダッシュボード
-//
-// 🏗️ 本番環境要件:
-// - ログの暗号化・署名 (改ざん防止)
-// - GDPR準拠のためのログ保持期間管理
-// - ログアクセス制御・監査証跡
-// - 災害復旧対応のログバックアップ戦略
-
 import (
-	"log"
+	"encoding/json"
+	"fmt"
+	"io"
 	"os"
+	"runtime"
+	"strings"
+	"time"
 )
 
-// Logger 基本ログ実装（開発用のみ）
-type Logger struct {
-	*log.Logger
+// LogLevel ログレベルを表す型
+type LogLevel int
+
+const (
+	// ログレベル定義
+	DEBUG LogLevel = iota
+	INFO
+	WARN
+	ERROR
+	FATAL
+)
+
+// String ログレベルを文字列に変換
+func (l LogLevel) String() string {
+	return [...]string{"DEBUG", "INFO", "WARN", "ERROR", "FATAL"}[l]
 }
 
-// NewLogger 新しい基本ロガーを作成
-func NewLogger() *Logger {
-	return &Logger{
-		Logger: log.New(os.Stdout, "[ERP-API] ", log.LstdFlags|log.Lshortfile),
+// LogEntry 構造化ログエントリ
+type LogEntry struct {
+	Timestamp   string                 `json:"timestamp"`
+	Level       string                 `json:"level"`
+	Message     string                 `json:"message"`
+	Caller      string                 `json:"caller,omitempty"`
+	TraceID     string                 `json:"trace_id,omitempty"`
+	Environment string                 `json:"environment,omitempty"`
+	Fields      map[string]interface{} `json:"fields,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+}
+
+// Logger 改善されたロガー実装
+type Logger struct {
+	output      io.Writer
+	minLevel    LogLevel
+	environment string
+	traceID     string
+}
+
+// LoggerOption ロガー設定オプション
+type LoggerOption func(*Logger)
+
+// WithOutput 出力先を設定
+func WithOutput(output io.Writer) LoggerOption {
+	return func(l *Logger) {
+		l.output = output
 	}
 }
 
-// Info 情報レベルのメッセージをログ出力
-func (l *Logger) Info(msg string) {
-	l.Printf("INFO: %s", msg)
+// WithMinLevel 最小ログレベルを設定
+func WithMinLevel(level LogLevel) LoggerOption {
+	return func(l *Logger) {
+		l.minLevel = level
+	}
 }
 
-// Error エラーレベルのメッセージをログ出力
-func (l *Logger) Error(msg string) {
-	l.Printf("ERROR: %s", msg)
+// WithEnvironment 環境を設定
+func WithEnvironment(env string) LoggerOption {
+	return func(l *Logger) {
+		l.environment = env
+	}
 }
 
-// Warn 警告レベルのメッセージをログ出力
-func (l *Logger) Warn(msg string) {
-	l.Printf("WARN: %s", msg)
+// WithTraceID トレースIDを設定
+func WithTraceID(traceID string) LoggerOption {
+	return func(l *Logger) {
+		l.traceID = traceID
+	}
 }
 
-// Debug デバッグレベルのメッセージをログ出力
-func (l *Logger) Debug(msg string) {
-	l.Printf("DEBUG: %s", msg)
-} 
+// NewLogger 新しいロガーを作成
+func NewLogger(opts ...LoggerOption) *Logger {
+	l := &Logger{
+		output:      os.Stdout,
+		minLevel:    INFO, // デフォルトはINFO
+		environment: os.Getenv("APP_ENV"),
+	}
+
+	// オプションの適用
+	for _, opt := range opts {
+		opt(l)
+	}
+
+	return l
+}
+
+// log 共通ログ出力処理
+func (l *Logger) log(level LogLevel, msg string, fields map[string]interface{}, err error) {
+	if level < l.minLevel {
+		return
+	}
+
+	// 呼び出し元の情報を取得
+	_, file, line, ok := runtime.Caller(2)
+	var caller string
+	if ok {
+		caller = fmt.Sprintf("%s:%d", file[strings.LastIndex(file, "/")+1:], line)
+	}
+
+	// ログエントリの作成
+	entry := LogEntry{
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+		Level:       level.String(),
+		Message:     msg,
+		Caller:      caller,
+		TraceID:     l.traceID,
+		Environment: l.environment,
+		Fields:      fields,
+	}
+
+	if err != nil {
+		entry.Error = err.Error()
+	}
+
+	// JSON形式でログ出力
+	if jsonData, err := json.Marshal(entry); err == nil {
+		fmt.Fprintln(l.output, string(jsonData))
+	}
+}
+
+// WithFields フィールド付きのログ出力
+func (l *Logger) WithFields(fields map[string]interface{}) *Logger {
+	return &Logger{
+		output:      l.output,
+		minLevel:    l.minLevel,
+		environment: l.environment,
+		traceID:     l.traceID,
+	}
+}
+
+// Debug デバッグレベルのログを出力
+func (l *Logger) Debug(msg string, fields map[string]interface{}) {
+	l.log(DEBUG, msg, fields, nil)
+}
+
+// Info 情報レベルのログを出力
+func (l *Logger) Info(msg string, fields map[string]interface{}) {
+	l.log(INFO, msg, fields, nil)
+}
+
+// Warn 警告レベルのログを出力
+func (l *Logger) Warn(msg string, fields map[string]interface{}) {
+	l.log(WARN, msg, fields, nil)
+}
+
+// Error エラーレベルのログを出力
+func (l *Logger) Error(msg string, err error, fields map[string]interface{}) {
+	l.log(ERROR, msg, fields, err)
+}
+
+// Fatal 致命的エラーレベルのログを出力
+func (l *Logger) Fatal(msg string, err error, fields map[string]interface{}) {
+	l.log(FATAL, msg, fields, err)
+	os.Exit(1)
+}
+
+// SensitiveFields センシティブ情報をマスクするフィールド
+var SensitiveFields = map[string]bool{
+	"password":     true,
+	"token":        true,
+	"api_key":      true,
+	"credit_card":  true,
+	"access_token": true,
+}
+
+// MaskSensitiveData センシティブ情報をマスク
+func MaskSensitiveData(data map[string]interface{}) map[string]interface{} {
+	masked := make(map[string]interface{})
+	for k, v := range data {
+		if SensitiveFields[strings.ToLower(k)] {
+			masked[k] = "********"
+		} else if nestedMap, ok := v.(map[string]interface{}); ok {
+			masked[k] = MaskSensitiveData(nestedMap)
+		} else {
+			masked[k] = v
+		}
+	}
+	return masked
+}
+
+// Example usage:
+/*
+logger := NewLogger(
+	WithMinLevel(DEBUG),
+	WithEnvironment("development"),
+	WithTraceID("trace-123"),
+)
+
+logger.Info("User logged in", map[string]interface{}{
+	"user_id": "123",
+	"ip": "192.168.1.1",
+})
+
+logger.Error("Failed to process payment",
+	fmt.Errorf("invalid card"),
+	map[string]interface{}{
+		"user_id": "123",
+		"amount": 100,
+		"credit_card": "1234-5678-9012-3456", // Will be masked
+	},
+)
+*/
