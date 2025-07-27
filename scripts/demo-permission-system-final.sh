@@ -487,11 +487,13 @@ demo_system_monitoring() {
     
     # 6.1 システムヘルスチェック
     log_step "6.1 システムヘルスチェック"
-    safe_api_call "GET" "../health" "" "ヘルスチェック"
+    local health_response=$(curl -s -X GET "http://localhost:8080/health")
+    show_response "ヘルスチェック" "$health_response"
     
     # 6.2 バージョン情報
     log_step "6.2 バージョン情報"  
-    safe_api_call "GET" "../version" "" "バージョン情報"
+    local version_response=$(curl -s -X GET "http://localhost:8080/version")
+    show_response "バージョン情報" "$version_response"
 }
 
 # =============================================================================
