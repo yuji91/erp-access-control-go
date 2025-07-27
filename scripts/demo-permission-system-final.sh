@@ -130,6 +130,46 @@ find_existing_permission() {
     echo "$perm_list" | jq -r ".permissions[]? | select(.module == \"$module\" and .action == \"$action\") | .id" 2>/dev/null
 }
 
+# 権限作成（存在チェック付き）
+create_permission_if_not_exists() {
+    local module="$1"
+    local action="$2"
+    local description="$3"
+    
+    log_info "権限作成チェック: $module:$action"
+    
+    # 既存権限チェック（堅牢版）
+    local existing_id
+    existing_id=$(find_existing_permission "$module" "$action")
+    
+    if [ -n "$existing_id" ] && [ "$existing_id" != "null" ]; then
+        log_info "権限 $module:$action は既に存在します (ID: $existing_id)"
+        echo "$existing_id"
+        return 0
+    fi
+    
+    # 新規作成
+    log_info "新しい権限を作成します: $module:$action"
+    local response=$(safe_api_call "POST" "permissions" "{
+        \"module\": \"$module\",
+        \"action\": \"$action\",
+        \"description\": \"$description\"
+    }" "権限作成: $module:$action")
+    
+    # safe_api_callの戻り値チェック
+    if [ $? -eq 0 ]; then
+        local perm_id=$(echo "$response" | jq -r '.id // .data.id' 2>/dev/null)
+        if [ -n "$perm_id" ] && [ "$perm_id" != "null" ]; then
+            log_success "権限作成成功: $module:$action (ID: $perm_id)"
+            echo "$perm_id"
+            return 0
+        fi
+    fi
+    
+    log_error "権限作成に失敗: $module:$action"
+    return 1
+}
+
 # レスポンス表示関数（改良版）
 show_response() {
     local title="$1"
@@ -150,7 +190,7 @@ show_response() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 
-# 安全なAPI呼び出し関数
+# 安全なAPI呼び出し関数（HTTPステータス確認機能付き）
 safe_api_call() {
     local method="$1"
     local endpoint="$2"
@@ -158,24 +198,40 @@ safe_api_call() {
     local context="$4"
     
     local response
+    local http_code
+    
     if [ "$method" = "POST" ]; then
-        response=$(curl -s -X POST "$API_BASE/$endpoint" \
+        response=$(curl -s -w "HTTP_CODE:%{http_code}" -X POST "$API_BASE/$endpoint" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
             -d "$data")
     elif [ "$method" = "GET" ]; then
-        response=$(curl -s -X GET "$API_BASE/$endpoint" \
+        response=$(curl -s -w "HTTP_CODE:%{http_code}" -X GET "$API_BASE/$endpoint" \
             -H "Authorization: Bearer $ACCESS_TOKEN")
     fi
     
-    show_response "$context" "$response"
+    # HTTPステータスとボディを分離
+    http_code=$(echo "$response" | grep -o 'HTTP_CODE:[0-9]*' | cut -d: -f2)
+    response_body=$(echo "$response" | sed 's/HTTP_CODE:[0-9]*$//')
     
-    # エラーチェック
-    if echo "$response" | grep -q '"code":'; then
+    show_response "$context" "$response_body"
+    
+    # HTTPステータスベースのエラー判定（優先）
+    if [[ "$http_code" -ge 400 ]]; then
+        log_error "HTTP Error $http_code: $context"
         return 1
     fi
     
-    echo "$response"
+    # レスポンス構造ベースの補助判定（エラーコードのみ）
+    if echo "$response_body" | jq -e '.code' >/dev/null 2>&1; then
+        local code_value=$(echo "$response_body" | jq -r '.code')
+        if [[ "$code_value" =~ ERROR$ ]]; then
+            log_error "API Error ($code_value): $context"
+            return 1
+        fi
+    fi
+    
+    echo "$response_body"
     return 0
 }
 
@@ -395,29 +451,12 @@ demo_permission_management() {
     for perm_data in "${permissions[@]}"; do
         IFS=':' read -r module action description <<< "$perm_data"
         
-        # 既存権限チェック
-        local existing_perm_id
-        existing_perm_id=$(find_existing_permission "$module" "$action")
-        
-        if [ -z "$existing_perm_id" ]; then
-            log_info "新しい権限を作成します: $module:$action"
-            local perm_response=$(curl -s -X POST "$API_BASE/permissions" \
-                -H "Authorization: Bearer $ACCESS_TOKEN" \
-                -H "Content-Type: application/json" \
-                -d "{
-                    \"module\": \"$module\",
-                    \"action\": \"$action\",
-                    \"description\": \"$description\"
-                }")
-            
-            local perm_id
-            if perm_id=$(extract_id_safely "$perm_response" "${module}:${action}権限作成"); then
-                show_response "${module}:${action}権限作成" "$perm_response"
-            else
-                show_response "${module}:${action}権限作成（エラー）" "$perm_response"
-            fi
+        # 改良された権限作成（存在チェック付き）
+        local perm_id
+        if perm_id=$(create_permission_if_not_exists "$module" "$action" "$description"); then
+            log_success "権限設定完了: $module:$action (ID: $perm_id)"
         else
-            log_info "既存の権限を使用: $module:$action ($existing_perm_id)"
+            log_warning "権限設定でエラーが発生しましたが、処理を継続します: $module:$action"
         fi
     done
     
