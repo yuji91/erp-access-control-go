@@ -216,4 +216,4 @@ coverage/
 # pkg/ 
 
 # PR Description Template
-docs/pull_request_description.md 
+docs/pull_request_description.md server
