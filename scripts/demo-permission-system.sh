@@ -566,7 +566,7 @@ main() {
     echo ""
     echo "📋 前提条件:"
     echo "  - サーバーが http://localhost:8080 で起動済み"
-    echo "  - 管理者アカウント admin@example.com / admin123 が利用可能"
+    echo "  - 管理者アカウント admin@example.com / password123 が利用可能"
     echo ""
     read -p "デモを開始しますか? (y/N): " -n 1 -r
     echo
