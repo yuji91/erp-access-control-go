@@ -101,7 +101,7 @@ Phase 4で認証・認可の基盤が完成したため、Phase 5では実際の
 - **統合テスト**: UserHandlerのAPIエンドポイントテスト
 - **権限テスト**: 認証・認可チェックテスト
 
-### **Step 2: Department管理API実装**
+### **Step 2: D管理API実装**
 **優先度**: 🟡 High | **工数**: 2-3日
 
 #### **2.1 DepartmentService実装** _(1日)_
