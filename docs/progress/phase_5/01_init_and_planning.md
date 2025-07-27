@@ -3,7 +3,9 @@
 ## 📋 **概要**
 
 Phase 4で認証・認可の基盤が完成したため、Phase 5では実際のビジネスロジックとなるCRUD APIの実装を行います。
-現在、認証ハンドラー（`AuthHandler`）とユーザーロール管理（`UserRoleHandler`）は完成済みですが、基本的なCRUD操作（User/Department/Role/Permission管理）が未実装です。
+
+**🎯 現在の進捗**: Step 1（User管理API）とStep 2（Department管理API）が完了済み（40%完了）。
+Step 3（Role管理API）の実装に向けて準備中です。
 
 ## 🎯 **目標・スコープ**
 
@@ -14,10 +16,10 @@ Phase 4で認証・認可の基盤が完成したため、Phase 5では実際の
 - **OpenAPI仕様書の更新**: 新しいエンドポイントの仕様書作成
 
 ### **対象範囲**
-- ✅ **完成済み**: 認証API (`AuthHandler`) - ログイン/ログアウト/プロフィール
-- ✅ **完成済み**: ユーザーロール管理API (`UserRoleHandler`) - 複数ロール操作
-- 🔧 **実装対象**: User管理API - ユーザーCRUD操作
-- 🔧 **実装対象**: Department管理API - 部署CRUD操作・階層管理
+- ✅ **完成済**: 認証API (`AuthHandler`) - ログイン/ログアウト/プロフィール
+- ✅ **完成済**: ユーザーロール管理API (`UserRoleHandler`) - 複数ロール操作
+- ✅ **完成済**: User管理API - ユーザーCRUD操作 _(Step 1完了)_
+- ✅ **完成済**: Department管理API - 部署CRUD操作・階層管理 _(Step 2完了)_
 - 🔧 **実装対象**: Role管理API - ロールCRUD操作・階層管理・権限割り当て
 - 🔧 **実装対象**: Permission管理API - 権限CRUD操作・権限マトリックス
 
@@ -29,13 +31,13 @@ Phase 4で認証・認可の基盤が完成したため、Phase 5では実際の
 
 ## 🗂️ **現在の実装状況**
 
-### **✅ 完成済みコンポーネント**
+### **✅ 完成済コンポーネント**
 
 #### **モデル層**
 - ✅ **全モデル定義完了**: User/Department/Role/Permission/UserRole
 - ✅ **リレーション設定完了**: 外部キー・多対多関係・階層構造
-- ✅ **カスタムメソッド実装済み**: 階層取得・権限チェック・CRUD操作
-- ✅ **バリデーション実装済み**: BeforeCreate/BeforeUpdate フック
+- ✅ **カスタムメソッド実装済**: 階層取得・権限チェック・CRUD操作
+- ✅ **バリデーション実装済**: BeforeCreate/BeforeUpdate フック
 
 #### **サービス層**
 - ✅ **AuthService**: 認証・認可サービス完成
@@ -54,15 +56,15 @@ Phase 4で認証・認可の基盤が完成したため、Phase 5では実際の
 
 ### **🔧 実装が必要なコンポーネント**
 
-#### **サービス層（未実装）**
-- ❌ **UserService**: ユーザーCRUD操作
-- ❌ **DepartmentService**: 部署CRUD操作・階層管理
+#### **サービス層（一部実装済）**
+- ✅ **UserService**: ユーザーCRUD操作 _(Step 1完了)_
+- ✅ **DepartmentService**: 部署CRUD操作・階層管理 _(Step 2完了)_
 - ❌ **RoleService**: ロールCRUD操作・権限割り当て
 - ❌ **PermissionService（拡張）**: 権限CRUD操作
 
-#### **ハンドラー層（未実装）**
-- ❌ **UserHandler**: ユーザー管理API
-- ❌ **DepartmentHandler**: 部署管理API
+#### **ハンドラー層（一部実装済）**
+- ✅ **UserHandler**: ユーザー管理API _(Step 1完了)_
+- ✅ **DepartmentHandler**: 部署管理API _(Step 2完了)_
 - ❌ **RoleHandler**: ロール管理API
 - ❌ **PermissionHandler**: 権限管理API
 
@@ -101,33 +103,35 @@ Phase 4で認証・認可の基盤が完成したため、Phase 5では実際の
 - **統合テスト**: UserHandlerのAPIエンドポイントテスト
 - **権限テスト**: 認証・認可チェックテスト
 
-### **Step 2: Department管理API実装**
+### **Step 2: Department管理API実装** ✅ **完了**
 **優先度**: 🟡 High | **工数**: 2-3日
 
-#### **2.1 DepartmentService実装** _(1日)_
+#### **2.1 DepartmentService実装** ✅ **完了** _(1日)_
 - **ファイル**: `internal/services/department.go`
-- **機能**:
-  - `CreateDepartment()` - 部署作成（階層構造対応）
-  - `GetDepartment()` - 部署詳細取得（親子関係込み）
-  - `UpdateDepartment()` - 部署更新（名前・親部署変更）
-  - `DeleteDepartment()` - 部署削除（子部署・所属ユーザーチェック）
-  - `GetDepartments()` - 部署一覧取得（階層表示）
-  - `GetDepartmentHierarchy()` - 部署階層ツリー取得
+- **実装済の機能**:
+  - ✅ `CreateDepartment()` - 部署作成（階層構造対応）
+  - ✅ `GetDepartment()` - 部署詳細取得（親子関係込み）
+  - ✅ `UpdateDepartment()` - 部署更新（名前・親部署変更）
+  - ✅ `DeleteDepartment()` - 部署削除（子部署・所属ユーザーチェック）
+  - ✅ `GetDepartments()` - 部署一覧取得（階層表示）
+  - ✅ `GetDepartmentHierarchy()` - 部署階層ツリー取得
 
-#### **2.2 DepartmentHandler実装** _(1日)_
+#### **2.2 DepartmentHandler実装** ✅ **完了** _(1日)_
 - **ファイル**: `internal/handlers/department.go`
-- **エンドポイント**:
-  - `POST /api/v1/departments` - 部署作成
-  - `GET /api/v1/departments` - 部署一覧・階層
-  - `GET /api/v1/departments/:id` - 部署詳細
-  - `PUT /api/v1/departments/:id` - 部署更新
-  - `DELETE /api/v1/departments/:id` - 部署削除
-  - `GET /api/v1/departments/hierarchy` - 階層ツリー
+- **実装済のエンドポイント**:
+  - ✅ `POST /api/v1/departments` - 部署作成
+  - ✅ `GET /api/v1/departments` - 部署一覧・階層
+  - ✅ `GET /api/v1/departments/:id` - 部署詳細
+  - ✅ `PUT /api/v1/departments/:id` - 部署更新
+  - ✅ `DELETE /api/v1/departments/:id` - 部署削除
+  - ✅ `GET /api/v1/departments/hierarchy` - 階層ツリー
 
-#### **2.3 階層管理・バリデーション** _(1日)_
-- **階層制限**: 循環参照防止・最大階層深度制限
-- **削除制限**: 子部署存在時の削除禁止・所属ユーザー存在チェック
-- **移動制限**: 部署移動時の権限・承認フロー
+#### **2.3 階層管理・バリデーション** ✅ **完了** _(1日)_
+- ✅ **階層制限**: 循環参照防止・最大階層深度制限（5階層）
+- ✅ **削除制限**: 子部署存在時の削除禁止・所属ユーザー存在チェック
+- ✅ **移動制限**: 部署移動時の循環参照・深度チェック
+- ✅ **テスト実装**: 単体テスト26ケース、統合テスト22ケース（全て成功）
+- ✅ **サーバー統合**: ルーティング設定・権限チェック完了
 
 ### **Step 3: Role管理API実装**
 **優先度**: 🟡 High | **工数**: 3-4日
@@ -157,7 +161,7 @@ Phase 4で認証・認可の基盤が完成したため、Phase 5では実際の
 #### **3.3 権限管理・バリデーション** _(1日)_
 - **階層権限継承**: 親ロールからの権限継承
 - **権限競合チェック**: 複数ロール間の権限競合解決
-- **削除制限**: ユーザー割り当て済みロールの削除禁止
+- **削除制限**: ユーザー割り当て済ロールの削除禁止
 
 ### **Step 4: Permission管理API実装**
 **優先度**: 🟢 Medium | **工数**: 2-3日
@@ -185,7 +189,7 @@ Phase 4で認証・認可の基盤が完成したため、Phase 5では実際の
 #### **4.3 権限マトリックス・バリデーション** _(1日)_
 - **Module・Action検証**: 有効なモジュール・アクション名
 - **重複チェック**: 同一権限の重複作成防止
-- **削除制限**: ロール割り当て済み権限の削除制限
+- **削除制限**: ロール割り当て済権限の削除制限
 
 ### **Step 5: 統合・最適化**
 **優先度**: 🟢 Medium | **工数**: 2-3日
@@ -254,20 +258,22 @@ Phase 4で認証・認可の基盤が完成したため、Phase 5では実際の
 
 ## 📊 **工数見積もり**
 
-| Step | 内容 | 工数 | 優先度 |
-|------|------|------|--------|
-| Step 1 | User管理API | 3-4日 | 🔴 Critical |
-| Step 2 | Department管理API | 2-3日 | 🟡 High |
-| Step 3 | Role管理API | 3-4日 | 🟡 High |
-| Step 4 | Permission管理API | 2-3日 | 🟢 Medium |
-| Step 5 | 統合・最適化 | 2-3日 | 🟢 Medium |
-| **合計** | - | **12-17日** | - |
+| Step | 内容 | 工数 | 優先度 | 状況 |
+|------|------|------|--------|------|
+| Step 1 | User管理API | 3-4日 | 🔴 Critical | ✅ **完了** |
+| Step 2 | Department管理API | 2-3日 | 🟡 High | ✅ **完了** |
+| Step 3 | Role管理API | 3-4日 | 🟡 High | 🔧 **実装中** |
+| Step 4 | Permission管理API | 2-3日 | 🟢 Medium | ⬜️ **未着手** |
+| Step 5 | 統合・最適化 | 2-3日 | 🟢 Medium | ⬜️ **未着手** |
+| **合計** | - | **12-17日** | - | **40%完了** |
 
-**📅 予想期間**: 約 **2.5-3.5週間** （1日8時間想定）
+**📅 予想期間**: ~~約 2.5-3.5週間~~ → **残り1.5-2週間** （Step 1-2完了済み）
 
 ## 🚀 **次のステップ**
 
-1. **Step 1から順次実装開始**
-2. **各Stepでの完了確認**
-3. **統合テスト実施**
-4. **Phase 6準備**（監査ログ・セキュリティ強化）
+1. ✅ ~~Step 1実装開始~~ → **Step 1完了**（User管理API）
+2. ✅ ~~Step 2実装開始~~ → **Step 2完了**（Department管理API）
+3. 🔧 **Step 3実装開始**（Role管理API実装）
+4. **Step 4実装**（Permission管理API実装）
+5. **Step 5統合・最適化**
+6. **Phase 6準備**（監査ログ・セキュリティ強化）
