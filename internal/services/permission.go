@@ -937,6 +937,13 @@ func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, erro
 
 	permissionSet := make(map[string]bool)
 
+	// デバッグログ：ユーザーロール情報
+	s.logger.Info("GetUserPermissions debug", map[string]interface{}{
+		"user_id":          userID,
+		"primary_role":     user.PrimaryRole,
+		"user_roles_count": len(user.UserRoles),
+	})
+
 	// 複数ロールから権限を集約
 	for _, userRole := range user.UserRoles {
 		// アクティブで有効期間内のロールのみ処理
@@ -944,11 +951,31 @@ func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, erro
 			continue
 		}
 
+		s.logger.Info("Processing user role", map[string]interface{}{
+			"role_name": userRole.Role.Name,
+			"role_id":   userRole.Role.ID,
+		})
+
 		// Get base permissions from matrix for each role
 		if basePerms, exists := PermissionMatrix[userRole.Role.Name]; exists {
+			s.logger.Info("Found role in PermissionMatrix", map[string]interface{}{
+				"role_name":        userRole.Role.Name,
+				"permissions":      basePerms,
+				"permission_count": len(basePerms),
+			})
 			for _, perm := range basePerms {
-				permissionSet[string(perm)] = true
+				permString := string(perm)
+				permissionSet[permString] = true
+
+				// ワイルドカード権限の場合はそのまま追加
+				if permString == "*:*" || permString == "*" {
+					permissionSet[permString] = true
+				}
 			}
+		} else {
+			s.logger.Warn("Role not found in PermissionMatrix", map[string]interface{}{
+				"role_name": userRole.Role.Name,
+			})
 		}
 
 		// Add explicit permissions from database for each role
@@ -959,10 +986,35 @@ func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, erro
 
 	// 後方互換性: PrimaryRoleが設定されている場合は優先
 	if user.PrimaryRole != nil {
+		s.logger.Info("Processing primary role", map[string]interface{}{
+			"primary_role_name": user.PrimaryRole.Name,
+			"primary_role_id":   user.PrimaryRole.ID,
+		})
+
 		if basePerms, exists := PermissionMatrix[user.PrimaryRole.Name]; exists {
+			s.logger.Info("Found primary role in PermissionMatrix", map[string]interface{}{
+				"role_name":        user.PrimaryRole.Name,
+				"permissions":      basePerms,
+				"permission_count": len(basePerms),
+			})
 			for _, perm := range basePerms {
-				permissionSet[string(perm)] = true
+				permString := string(perm)
+				permissionSet[permString] = true
+
+				// ワイルドカード権限の場合はそのまま追加
+				if permString == "*:*" || permString == "*" {
+					permissionSet[permString] = true
+				}
 			}
+		} else {
+			s.logger.Warn("Primary role not found in PermissionMatrix", map[string]interface{}{
+				"role_name": user.PrimaryRole.Name,
+			})
+		}
+
+		// PrimaryRoleの明示的権限も追加
+		for _, perm := range user.PrimaryRole.Permissions {
+			permissionSet[perm.GetUniqueKey()] = true
 		}
 	}
 
@@ -971,6 +1023,12 @@ func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, erro
 	for perm := range permissionSet {
 		permissions = append(permissions, perm)
 	}
+
+	s.logger.Info("Final permissions result", map[string]interface{}{
+		"user_id":           userID,
+		"total_permissions": len(permissions),
+		"permissions":       permissions,
+	})
 
 	return permissions, nil
 }

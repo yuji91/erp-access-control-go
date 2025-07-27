@@ -47,16 +47,18 @@ func ErrorHandler(log *logger.Logger) gin.HandlerFunc {
 					"method":      c.Request.Method,
 				})
 
-				// クライアントへのレスポンス
-				c.JSON(http.StatusInternalServerError, errors.NewInternalError("An unexpected error occurred"))
+				// レスポンスが既に送信されていない場合のみレスポンス送信
+				if !c.Writer.Written() {
+					c.JSON(http.StatusInternalServerError, errors.NewInternalError("An unexpected error occurred"))
+				}
 				c.Abort()
 			}
 		}()
 
 		c.Next()
 
-		// エラーハンドリング
-		if len(c.Errors) > 0 {
+		// エラーハンドリング（レスポンスが既に送信されていない場合のみ）
+		if len(c.Errors) > 0 && !c.Writer.Written() {
 			err := c.Errors.Last().Err
 			var apiErr *errors.APIError
 
@@ -104,6 +106,7 @@ func (m *AuthMiddleware) Authentication() gin.HandlerFunc {
 				"ip":   c.ClientIP(),
 			})
 			c.Error(errors.ErrInvalidToken)
+			c.Abort()
 			return
 		}
 
@@ -114,6 +117,7 @@ func (m *AuthMiddleware) Authentication() gin.HandlerFunc {
 				"ip":   c.ClientIP(),
 			})
 			c.Error(errors.ErrInvalidToken)
+			c.Abort()
 			return
 		}
 
@@ -125,6 +129,7 @@ func (m *AuthMiddleware) Authentication() gin.HandlerFunc {
 				"ip":    c.ClientIP(),
 			})
 			c.Error(errors.ErrInvalidToken)
+			c.Abort()
 			return
 		}
 
@@ -136,6 +141,7 @@ func (m *AuthMiddleware) Authentication() gin.HandlerFunc {
 				"path":     c.Request.URL.Path,
 			})
 			c.Error(errors.ErrTokenRevoked)
+			c.Abort()
 			return
 		}
 
@@ -166,18 +172,21 @@ func RequirePermissions(permissions ...string) gin.HandlerFunc {
 		userPerms, exists := c.Get("permissions")
 		if !exists {
 			c.Error(errors.ErrPermissionDenied)
+			c.Abort()
 			return
 		}
 
 		userPermissions, ok := userPerms.([]string)
 		if !ok {
 			c.Error(errors.ErrPermissionDenied)
+			c.Abort()
 			return
 		}
 
 		for _, requiredPerm := range permissions {
 			if !hasPermission(userPermissions, requiredPerm) {
 				c.Error(errors.NewAuthorizationError(fmt.Sprintf("Missing required permission: %s", requiredPerm)))
+				c.Abort()
 				return
 			}
 		}
@@ -192,12 +201,14 @@ func RequireAnyPermission(permissions ...string) gin.HandlerFunc {
 		userPerms, exists := c.Get("permissions")
 		if !exists {
 			c.Error(errors.ErrPermissionDenied)
+			c.Abort()
 			return
 		}
 
 		userPermissions, ok := userPerms.([]string)
 		if !ok {
 			c.Error(errors.ErrPermissionDenied)
+			c.Abort()
 			return
 		}
 
@@ -209,6 +220,7 @@ func RequireAnyPermission(permissions ...string) gin.HandlerFunc {
 		}
 
 		c.Error(errors.NewAuthorizationError(fmt.Sprintf("Missing any of required permissions: %s", strings.Join(permissions, ", "))))
+		c.Abort()
 	}
 }
 
@@ -218,29 +230,34 @@ func RequireOwnership() gin.HandlerFunc {
 		userID, exists := c.Get("user_id")
 		if !exists {
 			c.Error(errors.ErrPermissionDenied)
+			c.Abort()
 			return
 		}
 
 		currentUserID, ok := userID.(uuid.UUID)
 		if !ok {
 			c.Error(errors.ErrPermissionDenied)
+			c.Abort()
 			return
 		}
 
 		resourceUserID := c.Param("user_id")
 		if resourceUserID == "" {
 			c.Error(errors.NewValidationError("user_id", "missing user ID parameter"))
+			c.Abort()
 			return
 		}
 
 		resourceUserUUID, err := uuid.Parse(resourceUserID)
 		if err != nil {
 			c.Error(errors.NewValidationError("user_id", "invalid user ID format"))
+			c.Abort()
 			return
 		}
 
 		if currentUserID != resourceUserUUID {
 			c.Error(errors.NewAuthorizationError("You do not have permission to access this resource"))
+			c.Abort()
 			return
 		}
 
