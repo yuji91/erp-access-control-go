@@ -360,7 +360,7 @@ demo-quick: ## ⚡ 権限管理システム簡易デモ（確認用）
 	@echo "$(YELLOW)🔐 管理者ログインテスト:$(RESET)"
 	@curl -s -X POST http://localhost:8080/api/v1/auth/login \
 		-H "Content-Type: application/json" \
-		-d '{"email": "admin@example.com", "password": "admin123"}' | \
+		-d '{"email": "admin@example.com", "password": "password123"}' | \
 		jq '.data.access_token // .access_token // "ログイン失敗"' 2>/dev/null || echo "ログイン確認エラー"
 	@echo ""
 	@echo "$(GREEN)✅ 簡易デモ完了（詳細デモは 'make demo' で実行）$(RESET)"

@@ -99,7 +99,7 @@ admin_login() {
         -H "Content-Type: application/json" \
         -d '{
             "email": "admin@example.com",
-            "password": "admin123"
+            "password": "password123"
         }')
     
     if echo "$login_response" | grep -q "access_token"; then
