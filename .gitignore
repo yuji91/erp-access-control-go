@@ -214,3 +214,6 @@ coverage/
 # cmd/
 # internal/
 # pkg/ 
+
+# PR Description Template
+docs/pull_request_description.md 
