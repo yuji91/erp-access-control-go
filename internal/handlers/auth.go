@@ -86,17 +86,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"error": err.Error(),
 			"ip":    c.ClientIP(),
 		})
-
-		switch err {
-		case errors.ErrInvalidCredentials:
-			c.Error(errors.NewAuthenticationError("Invalid email or password"))
-		case errors.ErrUserNotFound:
-			c.Error(errors.NewAuthenticationError("User not found"))
-		case errors.ErrUserInactive:
-			c.Error(errors.NewAuthenticationError("User account is inactive"))
-		default:
-			c.Error(errors.NewInternalError("Failed to process login"))
-		}
+		c.Error(err)
 		return
 	}
 
@@ -105,6 +95,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if err != nil {
 		h.logger.Error("Failed to get user permissions", err, map[string]interface{}{
 			"user_id": userInfo.ID,
+			"ip":      c.ClientIP(),
 		})
 		c.Error(errors.NewInternalError("Failed to get user permissions"))
 		return
@@ -154,17 +145,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			"error": err.Error(),
 			"ip":    c.ClientIP(),
 		})
-
-		switch err {
-		case errors.ErrInvalidToken:
-			c.Error(errors.NewAuthenticationError("Invalid token"))
-		case errors.ErrTokenExpired:
-			c.Error(errors.NewAuthenticationError("Token has expired"))
-		case errors.ErrTokenRevoked:
-			c.Error(errors.NewAuthenticationError("Token has been revoked"))
-		default:
-			c.Error(errors.NewInternalError("Failed to refresh token"))
-		}
+		c.Error(err)
 		return
 	}
 
@@ -205,20 +186,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 			"error": err.Error(),
 			"ip":    c.ClientIP(),
 		})
-
-		switch err {
-		case errors.ErrInvalidToken:
-			c.Error(errors.NewAuthenticationError("Invalid token"))
-		case errors.ErrTokenRevoked:
-			c.JSON(http.StatusOK, gin.H{
-				"message":   "Already logged out",
-				"status":    "success",
-				"timestamp": time.Now().UTC().Format(time.RFC3339),
-			})
-			return
-		default:
-			c.Error(errors.NewInternalError("Failed to process logout"))
-		}
+		c.Error(err)
 		return
 	}
 
@@ -257,13 +225,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 			"user_id": userID,
 			"ip":      c.ClientIP(),
 		})
-
-		switch err {
-		case errors.ErrUserNotFound:
-			c.Error(errors.NewNotFoundError("User", "User not found"))
-		default:
-			c.Error(errors.NewInternalError("Failed to get user information"))
-		}
+		c.Error(err)
 		return
 	}
 
@@ -311,15 +273,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 			"error":   err.Error(),
 			"ip":      c.ClientIP(),
 		})
-
-		switch err {
-		case errors.ErrInvalidCredentials:
-			c.Error(errors.NewAuthenticationError("Current password is incorrect"))
-		case errors.ErrUserNotFound:
-			c.Error(errors.NewNotFoundError("User", "User not found"))
-		default:
-			c.Error(errors.NewInternalError("Failed to change password"))
-		}
+		c.Error(err)
 		return
 	}
 
