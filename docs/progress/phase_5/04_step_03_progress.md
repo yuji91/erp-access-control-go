@@ -8,7 +8,7 @@ Role管理APIの実装（Step 3）を開始します。RoleServiceとRoleHandler
 
 ### **3.1 RoleService実装** ✅ **完了**
 - **ファイル**: `internal/services/role.go`
-- **実装済み機能**:
+- **実装済の機能**:
   - ✅ `CreateRole()` - ロール作成（階層構造・権限設定対応）
   - ✅ `GetRole()` - ロール詳細取得（権限・階層込み）
   - ✅ `UpdateRole()` - ロール更新（名前・親ロール変更）
@@ -18,17 +18,17 @@ Role管理APIの実装（Step 3）を開始します。RoleServiceとRoleHandler
   - ✅ `GetRolePermissions()` - ロール権限一覧取得
   - ✅ `GetRoleHierarchy()` - ロール階層ツリー取得
 
-### **3.2 RoleHandler実装** ⬜️ **未着手**
+### **3.2 RoleHandler実装** ✅ **完了**
 - **ファイル**: `internal/handlers/role.go`
-- **実装予定エンドポイント**:
-  - ⬜️ `POST /api/v1/roles` - ロール作成
-  - ⬜️ `GET /api/v1/roles` - ロール一覧・階層
-  - ⬜️ `GET /api/v1/roles/:id` - ロール詳細
-  - ⬜️ `PUT /api/v1/roles/:id` - ロール更新
-  - ⬜️ `DELETE /api/v1/roles/:id` - ロール削除
-  - ⬜️ `PUT /api/v1/roles/:id/permissions` - 権限割り当て
-  - ⬜️ `GET /api/v1/roles/:id/permissions` - ロール権限一覧
-  - ⬜️ `GET /api/v1/roles/hierarchy` - 階層ツリー取得
+- **実装済のエンドポイント**:
+  - ✅ `POST /api/v1/roles` - ロール作成
+  - ✅ `GET /api/v1/roles` - ロール一覧・階層
+  - ✅ `GET /api/v1/roles/:id` - ロール詳細
+  - ✅ `PUT /api/v1/roles/:id` - ロール更新
+  - ✅ `DELETE /api/v1/roles/:id` - ロール削除
+  - ✅ `PUT /api/v1/roles/:id/permissions` - 権限割り当て
+  - ✅ `GET /api/v1/roles/:id/permissions` - ロール権限一覧
+  - ✅ `GET /api/v1/roles/hierarchy` - 階層ツリー取得
 
 ### **3.3 階層管理・権限継承** ⬜️ **未着手**
 - **ファイル**: `internal/services/role.go`
