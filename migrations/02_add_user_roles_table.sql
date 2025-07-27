@@ -3,7 +3,7 @@
 -- =============================================================================
 
 -- user_roles テーブル作成
-CREATE TABLE user_roles (
+CREATE TABLE IF NOT EXISTS user_roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
@@ -22,23 +22,52 @@ CREATE TABLE user_roles (
 );
 
 -- インデックス作成
-CREATE INDEX idx_user_roles_user_id ON user_roles(user_id);
-CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
-CREATE INDEX idx_user_roles_active_period ON user_roles(valid_from, valid_to) WHERE is_active = TRUE;
-CREATE INDEX idx_user_roles_priority ON user_roles(user_id, priority DESC) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role_id ON user_roles(role_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_active_period ON user_roles(valid_from, valid_to) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_user_roles_priority ON user_roles(user_id, priority DESC) WHERE is_active = TRUE;
 
 -- users テーブル変更（段階的移行）
-ALTER TABLE users ALTER COLUMN role_id DROP NOT NULL;
-ALTER TABLE users ADD COLUMN primary_role_id UUID REFERENCES roles(id);
+DO $$
+BEGIN
+    -- role_idカラムが存在する場合のみNOT NULL制約を削除
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'role_id'
+    ) THEN
+        ALTER TABLE users ALTER COLUMN role_id DROP NOT NULL;
+    END IF;
+END $$;
 
--- 既存データ移行
-INSERT INTO user_roles (user_id, role_id, valid_from, priority, is_active, assigned_reason)
-SELECT id, role_id, created_at, 1, true, 'Migration from single role'
-FROM users 
-WHERE role_id IS NOT NULL;
+-- primary_role_idカラムが存在しない場合のみ追加
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'primary_role_id'
+    ) THEN
+        ALTER TABLE users ADD COLUMN primary_role_id UUID REFERENCES roles(id);
+    END IF;
+END $$;
 
--- primary_role_id設定
-UPDATE users SET primary_role_id = role_id WHERE role_id IS NOT NULL;
+-- 既存データ移行（role_idが存在する場合のみ実行）
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'role_id'
+    ) THEN
+        INSERT INTO user_roles (user_id, role_id, valid_from, priority, is_active, assigned_reason)
+        SELECT id, role_id, created_at, 1, true, 'Migration from single role'
+        FROM users 
+        WHERE role_id IS NOT NULL
+        ON CONFLICT (user_id, role_id) DO NOTHING;
+
+        -- primary_role_id設定
+        UPDATE users SET primary_role_id = role_id 
+        WHERE role_id IS NOT NULL AND primary_role_id IS NULL;
+    END IF;
+END $$;
 
 -- コメント追加
 COMMENT ON TABLE user_roles IS '複数ロール対応: ユーザー・ロール関連テーブル';
