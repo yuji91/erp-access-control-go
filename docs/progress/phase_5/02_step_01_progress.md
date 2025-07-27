@@ -128,7 +128,7 @@ User管理APIの実装（Step 1）が完了しました。UserServiceとUserHand
 
 ### **Step 1.4 テスト実装** ✅ **完了**
 - ✅ **単体テスト**: UserServiceの各メソッドテスト（10テストスイート・38個のテストケース）
-- 📋 **統合テスト**: UserHandlerのAPIエンドポイントテスト（次フェーズで実装予定）
+- ✅ **統合テスト**: UserHandlerのAPIエンドポイントテスト（5テストスイート・22個のテストケース）
 - 📋 **権限テスト**: 認証・認可チェックテスト（次フェーズで実装予定）
 
 ## 📊 **実装統計**
@@ -143,7 +143,8 @@ User管理APIの実装（Step 1）が完了しました。UserServiceとUserHand
 - ✅ **8つのサービスメソッド**: ビジネスロジック実装
 - ✅ **6つのリクエスト型**: バリデーション付きデータ構造
 - ✅ **2つのレスポンス型**: 詳細・一覧レスポンス
-- ✅ **10テストスイート**: 包括的な単体テスト（38個のテストケース）
+- ✅ **15テストスイート**: 包括的なテスト（単体テスト10件・統合テスト5件）
+- ✅ **60個のテストケース**: ビジネスロジック38件・HTTPエンドポイント22件
 
 ## 🎉 **Step 1完了基準達成**
 
@@ -179,7 +180,7 @@ User管理APIの実装（Step 1）が完了しました。UserServiceとUserHand
 --- PASS: TestUserService_ListResponse (0.00s)
 ```
 
-### **テストカバレッジ**
+### **単体テストカバレッジ（UserService）**
 - **ユーザー作成**: バリデーション・パスワードハッシュ化・リクエスト構造
 - **ユーザー更新**: 部分更新ロジック・フィールド検証
 - **パスワード変更**: 強度検証・ハッシュ化・検証ロジック
@@ -188,6 +189,27 @@ User管理APIの実装（Step 1）が完了しました。UserServiceとUserHand
 - **エラーハンドリング**: バリデーション・NotFound・データベースエラー
 - **データ変換**: UUID処理・文字列変換
 - **レスポンス構造**: 必須フィールド・オプショナルフィールド・リレーション
+
+### **統合テスト結果** ✅ **全テスト成功**
+```bash
+=== RUN   TestUserHandler_CreateUser_ValidRequest
+--- PASS: TestUserHandler_CreateUser_ValidRequest (4 sub-tests)
+=== RUN   TestUserHandler_GetUsers_QueryParams  
+--- PASS: TestUserHandler_GetUsers_QueryParams (5 sub-tests)
+=== RUN   TestUserHandler_PathParameters
+--- PASS: TestUserHandler_PathParameters (3 sub-tests)
+=== RUN   TestUserHandler_HTTPMethods
+--- PASS: TestUserHandler_HTTPMethods (7 sub-tests)
+=== RUN   TestUserHandler_RequestValidation
+--- PASS: TestUserHandler_RequestValidation (5 sub-tests)
+```
+
+### **統合テストカバレッジ（UserHandler）**
+- **リクエストバリデーション**: 正常・異常リクエスト・メール形式・UUID形式
+- **クエリパラメータ**: ページング・部署フィルター・検索・不正UUID
+- **パスパラメータ**: 有効・無効UUID処理・空値処理
+- **HTTPメソッド**: 全7エンドポイントのルーティング検証
+- **ステータスバリデーション**: enum値検証・必須フィールド
 
 **🚀 Phase 5 Step 1 (User管理API実装) 完了！**
 
@@ -292,7 +314,7 @@ users.POST("", middleware.RequirePermissions("user:create"), userHandler.CreateU
 
 ### **Step 1.4 テスト実装** ✅ **完了**
 1. ✅ **単体テスト**: UserServiceの各メソッドテスト - 包括的なテストスイート実装
-2. 📋 **統合テスト**: UserHandlerのAPIエンドポイントテスト - 次フェーズで実装
+2. ✅ **統合テスト**: UserHandlerのAPIエンドポイントテスト - HTTPレベルテスト完了
 3. 📋 **権限テスト**: 認証・認可チェックテスト - 次フェーズで実装
 4. 📋 **セキュリティテスト**: 権限チェック・バリデーションテスト - 次フェーズで実装
 
