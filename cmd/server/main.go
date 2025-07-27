@@ -78,6 +78,22 @@ func initDatabase(cfg *config.Config) (*gorm.DB, error) {
 
 // initServices 全サービスを初期化
 func initServices(db *gorm.DB, cfg *config.Config) *ServiceContainer {
+	// ロガー初期化
+	var minLevel logger.LogLevel
+	switch cfg.Environment {
+	case "production":
+		minLevel = logger.WARN
+	case "staging":
+		minLevel = logger.INFO
+	default:
+		minLevel = logger.DEBUG
+	}
+
+	appLogger := logger.NewLogger(
+		logger.WithMinLevel(minLevel),
+		logger.WithEnvironment(cfg.Environment),
+	)
+
 	// JWT サービス
 	jwtService := jwt.NewService(cfg.JWT.Secret, cfg.JWT.AccessTokenDuration)
 
@@ -85,6 +101,7 @@ func initServices(db *gorm.DB, cfg *config.Config) *ServiceContainer {
 	permissionService := services.NewPermissionService(db)
 	revocationService := services.NewTokenRevocationService(db)
 	userRoleService := services.NewUserRoleService(db)
+	userService := services.NewUserService(db, appLogger)
 
 	// 認証サービス
 	authService := services.NewAuthService(
@@ -99,6 +116,7 @@ func initServices(db *gorm.DB, cfg *config.Config) *ServiceContainer {
 		Permission: permissionService,
 		Revocation: revocationService,
 		UserRole:   userRoleService,
+		User:       userService,
 		JWT:        jwtService,
 	}
 }
@@ -153,6 +171,9 @@ func setupRoutes(services *ServiceContainer, middlewares *MiddlewareContainer, a
 		protected := v1.Group("")
 		protected.Use(middlewares.Auth.Authentication())
 		{
+			// ユーザー管理
+			setupUserRoutes(protected, services.User, appLogger)
+
 			// ユーザーロール管理
 			setupUserRoleRoutes(protected, services.UserRole)
 		}
@@ -200,6 +221,14 @@ func setupBasicRoutes(router *gin.Engine) {
 				"POST /api/v1/auth/login         - ログイン",
 				"POST /api/v1/auth/refresh       - トークンリフレッシュ",
 				"POST /api/v1/auth/logout        - ログアウト",
+				"GET /api/v1/auth/profile        - プロフィール取得",
+				"POST /api/v1/users              - ユーザー作成",
+				"GET /api/v1/users               - ユーザー一覧",
+				"GET /api/v1/users/{id}          - ユーザー詳細",
+				"PUT /api/v1/users/{id}          - ユーザー更新",
+				"DELETE /api/v1/users/{id}       - ユーザー削除",
+				"PUT /api/v1/users/{id}/status   - ステータス変更",
+				"PUT /api/v1/users/{id}/password - パスワード変更",
 				"POST /api/v1/users/roles        - ロール割り当て",
 				"GET /api/v1/users/{id}/roles    - ユーザーロール一覧",
 				"PATCH /api/v1/users/{id}/roles/{role_id} - ロール更新",
@@ -227,6 +256,27 @@ func setupAuthRoutes(group *gin.RouterGroup, authService *services.AuthService, 
 			protected.GET("/profile", authHandler.GetProfile)
 			protected.POST("/change-password", authHandler.ChangePassword)
 		}
+	}
+}
+
+// setupUserRoutes ユーザー管理エンドポイントを設定
+func setupUserRoutes(group *gin.RouterGroup, userService *services.UserService, appLogger *logger.Logger) {
+	userHandler := handlers.NewUserHandler(userService, appLogger)
+
+	users := group.Group("/users")
+	{
+		// ユーザーCRUD
+		users.POST("", userHandler.CreateUser)       // POST /api/v1/users
+		users.GET("", userHandler.GetUsers)          // GET /api/v1/users
+		users.GET("/:id", userHandler.GetUser)       // GET /api/v1/users/:id
+		users.PUT("/:id", userHandler.UpdateUser)    // PUT /api/v1/users/:id
+		users.DELETE("/:id", userHandler.DeleteUser) // DELETE /api/v1/users/:id
+
+		// ステータス変更
+		users.PUT("/:id/status", userHandler.ChangeUserStatus) // PUT /api/v1/users/:id/status
+
+		// パスワード変更
+		users.PUT("/:id/password", userHandler.ChangePassword) // PUT /api/v1/users/:id/password
 	}
 }
 
@@ -263,6 +313,7 @@ type ServiceContainer struct {
 	Permission *services.PermissionService
 	Revocation *services.TokenRevocationService
 	UserRole   *services.UserRoleService
+	User       *services.UserService
 	JWT        *jwt.Service
 }
 
