@@ -102,6 +102,7 @@ func initServices(db *gorm.DB, cfg *config.Config) *ServiceContainer {
 	revocationService := services.NewTokenRevocationService(db)
 	userRoleService := services.NewUserRoleService(db)
 	userService := services.NewUserService(db, appLogger)
+	departmentService := services.NewDepartmentService(db, appLogger)
 
 	// 認証サービス
 	authService := services.NewAuthService(
@@ -117,6 +118,7 @@ func initServices(db *gorm.DB, cfg *config.Config) *ServiceContainer {
 		Revocation: revocationService,
 		UserRole:   userRoleService,
 		User:       userService,
+		Department: departmentService,
 		JWT:        jwtService,
 	}
 }
@@ -176,6 +178,9 @@ func setupRoutes(services *ServiceContainer, middlewares *MiddlewareContainer, a
 
 			// ユーザーロール管理
 			setupUserRoleRoutes(protected, services.UserRole)
+
+			// 部署管理
+			setupDepartmentRoutes(protected, services.Department, appLogger)
 		}
 	}
 
@@ -216,23 +221,29 @@ func setupBasicRoutes(router *gin.Engine) {
 				"JWT認証",
 			},
 			"endpoints": []string{
-				"GET /health                     - ヘルスチェック",
-				"GET /version                    - バージョン情報",
-				"POST /api/v1/auth/login         - ログイン",
-				"POST /api/v1/auth/refresh       - トークンリフレッシュ",
-				"POST /api/v1/auth/logout        - ログアウト",
-				"GET /api/v1/auth/profile        - プロフィール取得",
-				"POST /api/v1/users              - ユーザー作成",
-				"GET /api/v1/users               - ユーザー一覧",
-				"GET /api/v1/users/{id}          - ユーザー詳細",
-				"PUT /api/v1/users/{id}          - ユーザー更新",
-				"DELETE /api/v1/users/{id}       - ユーザー削除",
-				"PUT /api/v1/users/{id}/status   - ステータス変更",
-				"PUT /api/v1/users/{id}/password - パスワード変更",
-				"POST /api/v1/users/roles        - ロール割り当て",
-				"GET /api/v1/users/{id}/roles    - ユーザーロール一覧",
+				"GET /health                       - ヘルスチェック",
+				"GET /version                      - バージョン情報",
+				"POST /api/v1/auth/login           - ログイン",
+				"POST /api/v1/auth/refresh         - トークンリフレッシュ",
+				"POST /api/v1/auth/logout          - ログアウト",
+				"GET /api/v1/auth/profile          - プロフィール取得",
+				"POST /api/v1/users                - ユーザー作成",
+				"GET /api/v1/users                 - ユーザー一覧",
+				"GET /api/v1/users/{id}            - ユーザー詳細",
+				"PUT /api/v1/users/{id}            - ユーザー更新",
+				"DELETE /api/v1/users/{id}         - ユーザー削除",
+				"PUT /api/v1/users/{id}/status     - ステータス変更",
+				"PUT /api/v1/users/{id}/password   - パスワード変更",
+				"POST /api/v1/users/roles          - ロール割り当て",
+				"GET /api/v1/users/{id}/roles      - ユーザーロール一覧",
 				"PATCH /api/v1/users/{id}/roles/{role_id} - ロール更新",
 				"DELETE /api/v1/users/{id}/roles/{role_id} - ロール取り消し",
+				"POST /api/v1/departments          - 部署作成",
+				"GET /api/v1/departments           - 部署一覧",
+				"GET /api/v1/departments/hierarchy - 部署階層構造",
+				"GET /api/v1/departments/{id}      - 部署詳細",
+				"PUT /api/v1/departments/{id}      - 部署更新",
+				"DELETE /api/v1/departments/{id}   - 部署削除",
 			},
 		})
 	})
@@ -290,6 +301,22 @@ func setupUserRoleRoutes(group *gin.RouterGroup, userRoleService *services.UserR
 	group.DELETE("/users/:user_id/roles/:role_id", userRoleHandler.RevokeRole)
 }
 
+// setupDepartmentRoutes 部署管理エンドポイントを設定
+func setupDepartmentRoutes(group *gin.RouterGroup, departmentService *services.DepartmentService, appLogger *logger.Logger) {
+	departmentHandler := handlers.NewDepartmentHandler(departmentService, appLogger)
+
+	departments := group.Group("/departments")
+	{
+		// 部署CRUD（権限チェック付き）
+		departments.POST("", middleware.RequirePermissions("department:create"), departmentHandler.CreateDepartment)              // POST /api/v1/departments
+		departments.GET("", middleware.RequirePermissions("department:list"), departmentHandler.GetDepartments)                   // GET /api/v1/departments
+		departments.GET("/hierarchy", middleware.RequirePermissions("department:list"), departmentHandler.GetDepartmentHierarchy) // GET /api/v1/departments/hierarchy
+		departments.GET("/:id", middleware.RequirePermissions("department:read"), departmentHandler.GetDepartment)                // GET /api/v1/departments/:id
+		departments.PUT("/:id", middleware.RequirePermissions("department:update"), departmentHandler.UpdateDepartment)           // PUT /api/v1/departments/:id
+		departments.DELETE("/:id", middleware.RequirePermissions("department:delete"), departmentHandler.DeleteDepartment)        // DELETE /api/v1/departments/:id
+	}
+}
+
 // startServer サーバーを起動
 func startServer(router *gin.Engine, port string) {
 	if port == "" {
@@ -314,6 +341,7 @@ type ServiceContainer struct {
 	Revocation *services.TokenRevocationService
 	UserRole   *services.UserRoleService
 	User       *services.UserService
+	Department *services.DepartmentService
 	JWT        *jwt.Service
 }
 
