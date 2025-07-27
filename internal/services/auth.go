@@ -1,7 +1,6 @@
 package services
 
 import (
-	"fmt"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -53,14 +52,14 @@ type LoginResponse struct {
 
 // UserInfo レスポンス用ユーザー情報（複数ロール対応）
 type UserInfo struct {
-	ID            uuid.UUID    `json:"id"`
-	Name          string       `json:"name"`
-	Email         string       `json:"email"`
-	Status        string       `json:"status"`
-	PrimaryRole   *RoleInfo    `json:"primary_role,omitempty"`
-	ActiveRoles   []RoleInfo   `json:"active_roles,omitempty"`
-	HighestRole   *RoleInfo    `json:"highest_role,omitempty"`
-	Department    DeptInfo     `json:"department"`
+	ID          uuid.UUID  `json:"id"`
+	Name        string     `json:"name"`
+	Email       string     `json:"email"`
+	Status      string     `json:"status"`
+	PrimaryRole *RoleInfo  `json:"primary_role,omitempty"`
+	ActiveRoles []RoleInfo `json:"active_roles,omitempty"`
+	HighestRole *RoleInfo  `json:"highest_role,omitempty"`
+	Department  DeptInfo   `json:"department"`
 }
 
 // RoleInfo ロール情報（複数ロール対応）
@@ -97,55 +96,30 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 		return nil, errors.NewDatabaseError(err)
 	}
 
-	// デバッグログ
-	fmt.Printf("DEBUG: User found - ID: %s, Name: %s, Email: %s\n", user.ID, user.Name, user.Email)
-	if user.PrimaryRole != nil {
-		fmt.Printf("DEBUG: Primary Role - ID: %s, Name: %s\n", user.PrimaryRole.ID, user.PrimaryRole.Name)
-	}
-	fmt.Printf("DEBUG: UserRoles count: %d\n", len(user.UserRoles))
-
 	// Check if user is active
-	fmt.Printf("DEBUG: Checking user status: %s\n", user.Status)
 	if user.Status != models.UserStatusActive {
-		fmt.Printf("DEBUG: User is not active: %s\n", user.Status)
 		return nil, errors.NewAuthenticationError("user account is not active")
 	}
 
 	// Verify password
-	fmt.Printf("DEBUG: Verifying password for user: %s\n", user.Email)
-	fmt.Printf("DEBUG: Password hash length: %d\n", len(user.PasswordHash))
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		fmt.Printf("DEBUG: Password verification failed: %v\n", err)
 		return nil, errors.NewAuthenticationError("invalid email or password")
 	}
-	fmt.Printf("DEBUG: Password verification successful\n")
 
 	// Get user permissions（複数ロール対応）
-	fmt.Printf("DEBUG: Getting user permissions for user ID: %s\n", user.ID)
 	// 一時的に権限取得をスキップ
 	permissions := []string{"user:read", "user:write", "user:delete"}
-	fmt.Printf("DEBUG: Using default permissions count: %d\n", len(permissions))
 
 	// アクティブロール情報を取得
-	fmt.Printf("DEBUG: Getting active roles for user: %s\n", user.ID)
 	activeRoles, err := user.GetActiveRoles(s.db)
 	if err != nil {
-		fmt.Printf("DEBUG: Error getting active roles: %v\n", err)
 		return nil, errors.NewDatabaseError(err)
 	}
-	fmt.Printf("DEBUG: Active roles count: %d\n", len(activeRoles))
 
 	// 最高優先度ロールを取得
-	fmt.Printf("DEBUG: Getting highest priority role for user: %s\n", user.ID)
 	highestRole, err := user.GetHighestPriorityRole(s.db)
 	if err != nil && err != gorm.ErrRecordNotFound {
-		fmt.Printf("DEBUG: Error getting highest priority role: %v\n", err)
 		return nil, errors.NewDatabaseError(err)
-	}
-	if highestRole != nil {
-		fmt.Printf("DEBUG: Highest priority role: %s\n", highestRole.Name)
-	} else {
-		fmt.Printf("DEBUG: No highest priority role found\n")
 	}
 
 	// JWT用のロール情報を構築
@@ -190,20 +164,17 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	}
 
 	// Generate JWT token（複数ロール対応）
-	fmt.Printf("DEBUG: Generating JWT token for user: %s\n", user.Email)
 	token, err := s.jwtService.GenerateToken(
-		user.ID, 
-		user.Email, 
-		permissions, 
+		user.ID,
+		user.Email,
+		permissions,
 		user.PrimaryRoleID,
 		jwtActiveRoles,
 		jwtHighestRole,
 	)
 	if err != nil {
-		fmt.Printf("DEBUG: Error generating JWT token: %v\n", err)
 		return nil, errors.NewInternalError("failed to generate token")
 	}
-	fmt.Printf("DEBUG: JWT token generated successfully\n")
 
 	// Prepare response（複数ロール対応）
 	userInfo := UserInfo{
@@ -439,12 +410,12 @@ func (s *AuthService) LoginWithCredentials(email, password string) (*UserInfo, s
 		Email:    email,
 		Password: password,
 	}
-	
+
 	resp, err := s.Login(req)
 	if err != nil {
 		return nil, "", err
 	}
-	
+
 	return &resp.User, resp.Token, nil
 }
 
