@@ -6,17 +6,17 @@ Permission管理APIの実装（Step 4）を開始します。PermissionService�
 
 ## ⬜️ **実装予定項目**
 
-### **4.1 PermissionService拡張** ⬜️ **未着手**
+### **4.1 PermissionService拡張** ✅ **完了**
 - **ファイル**: `internal/services/permission.go`（既存拡張）
-- **実装予定機能**:
-  - ⬜️ `CreatePermission()` - 権限作成（モジュール・アクション検証）
-  - ⬜️ `GetPermission()` - 権限詳細取得（関連ロール込み）
-  - ⬜️ `UpdatePermission()` - 権限更新（説明・アクション変更）
-  - ⬜️ `DeletePermission()` - 権限削除（ロール割り当てチェック）
-  - ⬜️ `GetPermissions()` - 権限一覧取得（モジュール・アクション別）
-  - ⬜️ `GetPermissionMatrix()` - 権限マトリックス取得（ロール別権限表示）
-  - ⬜️ `GetPermissionsByModule()` - モジュール別権限取得
-  - ⬜️ `GetRolesByPermission()` - 権限を持つロール一覧取得
+- **実装済の機能**:
+  - ✅ `CreatePermission()` - 権限作成（モジュール・アクション検証・システム権限保護）
+  - ✅ `GetPermission()` - 権限詳細取得（関連ロール・統計情報込み）
+  - ✅ `UpdatePermission()` - 権限更新（システム権限保護・説明更新対応）
+  - ✅ `DeletePermission()` - 権限削除（ロール割り当て・システム権限チェック）
+  - ✅ `GetPermissions()` - 権限一覧取得（フィルタ・検索・ページング）
+  - ✅ `GetPermissionMatrix()` - 権限マトリックス取得（2次元表示・統計）
+  - ✅ `GetPermissionsByModule()` - モジュール別権限取得
+  - ✅ `GetRolesByPermission()` - 権限を持つロール一覧取得
 
 ### **4.2 PermissionHandler実装** ⬜️ **未着手**
 - **ファイル**: `internal/handlers/permission.go`
