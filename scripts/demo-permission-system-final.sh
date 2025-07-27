@@ -456,10 +456,11 @@ demo_user_management() {
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{
-                \"username\": \"demo_manager_${TIMESTAMP}\",
+                \"name\": \"demo_manager_${TIMESTAMP}\",
                 \"email\": \"demo_manager_${TIMESTAMP}@example.com\",
                 \"password\": \"password123\",
-                \"department_id\": \"$DEPT_SALES_ID\"
+                \"department_id\": \"$DEPT_SALES_ID\",
+                \"primary_role_id\": \"$MANAGER_ROLE_ID\"
             }")
         
         local user_id
