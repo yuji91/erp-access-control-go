@@ -201,16 +201,16 @@ func TestPermissionHandler_CreatePermission_Validation(t *testing.T) {
 		{
 			name: "正常系: 基本権限作成",
 			requestBody: `{
-				"module": "user",
+				"module": "inventory",
 				"action": "create",
-				"description": "ユーザー作成権限"
+				"description": "在庫作成権限"
 			}`,
 			expectedStatus: http.StatusCreated,
 		},
 		{
 			name: "正常系: 説明なし権限作成",
 			requestBody: `{
-				"module": "inventory",
+				"module": "orders",
 				"action": "read"
 			}`,
 			expectedStatus: http.StatusCreated,
@@ -262,7 +262,7 @@ func TestPermissionHandler_CreatePermission_Validation(t *testing.T) {
 	t.Run("異常系: 重複権限作成", func(t *testing.T) {
 		// 最初に権限を作成
 		firstReq := `{
-			"module": "order",
+			"module": "orders",
 			"action": "create"
 		}`
 		req, _ := http.NewRequest("POST", "/api/v1/permissions", strings.NewReader(firstReq))
@@ -424,9 +424,9 @@ func TestPermissionHandler_CRUD_Flow(t *testing.T) {
 
 	// Step 1: 権限作成
 	createReq := `{
-		"module": "test",
+		"module": "inventory",
 		"action": "create",
-		"description": "テスト権限"
+		"description": "在庫作成権限"
 	}`
 	req, _ := http.NewRequest("POST", "/api/v1/permissions", strings.NewReader(createReq))
 	req.Header.Set("Content-Type", "application/json")
@@ -449,7 +449,7 @@ func TestPermissionHandler_CRUD_Flow(t *testing.T) {
 
 	// Step 3: 権限更新
 	updateReq := `{
-		"description": "更新されたテスト権限"
+		"description": "更新された在庫作成権限"
 	}`
 	req, _ = http.NewRequest("PUT", "/api/v1/permissions/"+permissionID, strings.NewReader(updateReq))
 	req.Header.Set("Content-Type", "application/json")

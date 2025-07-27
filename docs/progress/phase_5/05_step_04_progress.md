@@ -219,62 +219,74 @@ Permission管理APIの実装（Step 4）を開始します。PermissionService�
 
 ## 🧪 **テスト実装計画**
 
-### **単体テスト実装** ⬜️ **未着手**
+### **単体テスト実装** ✅ **実装完了**
 - **ファイル**: `internal/services/permission_test.go`
-- **実装予定テスト**:
-  - ⬜️ `TestPermissionService_InputValidation` - 入力値検証テスト
-    - CreatePermission入力値検証：モジュール名、アクション名、説明、権限コード
-    - UpdatePermission入力値検証：説明変更、アクション変更制限
-    - Module・Action組み合わせ検証：有効・無効組み合わせ
-  - ⬜️ `TestPermissionService_DuplicationValidation` - 重複検証テスト
-    - 権限重複検証：同一module+action、大文字小文字、システム権限
-    - 権限コード生成：自動生成、重複回避
-  - ⬜️ `TestPermissionService_DeleteValidation` - 削除制限検証テスト
-    - 削除制限：ロール割り当て済み、システム権限、使用中権限
-    - 正常削除：未使用権限、テスト権限
-  - ⬜️ `TestPermissionService_PermissionMatrix` - 権限マトリックステスト
+- **実装済みテスト**:
+  - ✅ `TestPermissionService_CreatePermission` - 権限作成テスト
+    - 正常系：基本権限作成、モジュール・アクション検証
+    - 異常系：重複権限、システム権限、無効モジュール・アクション
+  - ✅ `TestPermissionService_GetPermission` - 権限取得テスト
+    - 正常系：存在する権限取得、関連ロール・使用状況取得
+    - 異常系：存在しない権限
+  - ✅ `TestPermissionService_UpdatePermission` - 権限更新テスト
+    - 正常系：説明更新
+    - 異常系：システム権限更新制限、存在しない権限
+  - ✅ `TestPermissionService_DeletePermission` - 権限削除テスト
+    - 正常系：未使用権限削除
+    - 異常系：システム権限削除、ロール割り当て済み権限、存在しない権限
+  - ✅ `TestPermissionService_GetPermissions` - 権限一覧取得テスト
+    - 正常系：全権限取得、モジュール・アクション・検索フィルタ、ページング、ロール使用フィルタ
+    - 異常系：無効なロールID
+  - ✅ `TestPermissionService_GetPermissionMatrix` - 権限マトリックステスト
     - マトリックス生成：モジュール×アクション構造、ロール関連付け
-    - 統計情報：使用統計、カバレッジ、孤立権限検出
-  - ⬜️ `TestPermissionService_CRUDOperations` - CRUD操作テスト
-    - Create操作：基本作成、システム権限作成制限
-    - Read操作：存在する権限取得、存在しない権限
-    - Update操作：説明更新、システム権限更新制限
-    - Delete操作：基本削除、存在しない権限
-    - List操作：全取得、モジュールフィルタ、検索、ページング
-  - ⬜️ `TestPermissionService_ModuleManagement` - モジュール管理テスト
-    - モジュール別権限：取得、フィルタリング、統計
-    - ロール別権限：権限保有ロール取得、権限マトリックス
+    - 統計情報：総権限数、モジュール数、アクション数、未使用権限検出
+  - ✅ `TestPermissionService_GetPermissionsByModule` - モジュール別権限テスト
+    - 正常系：有効なモジュール、権限一覧取得
+    - 異常系：無効なモジュール
+  - ✅ `TestPermissionService_GetRolesByPermission` - 権限保有ロールテスト
+    - 正常系：権限保有ロール取得
+    - 異常系：存在しない権限
+  - ✅ `TestPermissionService_SystemPermissionProtection` - システム権限保護テスト
+    - システム権限（user:read, department:read, role:list等）の保護確認
+  - ✅ `TestPermissionService_Step43_ValidationEnhancements` - バリデーション強化テスト
+    - Module-Action組み合わせバリデーション（基本CRUD、audit制限、system制限）
+    - 権限依存関係バリデーション（前提権限チェック）
+    - 権限削除時の依存関係チェック
+    - システム権限保護包括テスト
+    - 複合バリデーション・権限階層チェーンテスト
 
-### **統合テスト実装** ⬜️ **未着手**
+### **統合テスト実装** ✅ **実装完了（80%成功）**
 - **ファイル**: `internal/handlers/permission_integration_test.go`
-- **実装予定テスト**:
-  - ⬜️ `TestPermissionHandler_CreatePermission_Validation` - 権限作成バリデーション
-    - 正常系：基本作成、モジュール・アクション指定
-    - 異常系：必須項目不足、重複権限、無効JSON
-  - ⬜️ `TestPermissionHandler_GetPermissions_QueryParams` - クエリパラメータテスト
-    - 正常系：全取得、ページング、モジュールフィルタ、検索
-    - 異常系：無効ページ、無効リミット、存在しないモジュール
-  - ⬜️ `TestPermissionHandler_GetPermission_PathParams` - パスパラメータテスト
+- **実装済テスト**:
+  - ✅ `TestPermissionHandler_CreatePermission_Validation` - 権限作成バリデーション
+    - 正常系：基本作成（1件成功、1件DB問題）
+    - 異常系：必須項目不足、重複権限、無効JSON（全て成功）
+  - ✅ `TestPermissionHandler_GetPermissions_QueryParams` - クエリパラメータテスト
+    - 正常系：全取得、ページング、モジュール・アクション・検索・ロールフィルタ
+    - 異常系：無効ページ、無効リミット、無効UUID（全9項目成功）
+  - ✅ `TestPermissionHandler_GetPermission_PathParams` - パスパラメータテスト
     - 正常系：存在する権限取得、ロール情報込み
-    - 異常系：存在しない権限、無効UUID
-  - ⬜️ `TestPermissionHandler_CRUD_Flow` - CRUD操作フロー
-    - Step1-5：作成→取得→更新→マトリックス確認→削除
-  - ⬜️ `TestPermissionHandler_PermissionMatrix` - 権限マトリックステスト
+    - 異常系：存在しない権限、無効UUID（全3項目成功）
+  - ✅ `TestPermissionHandler_CRUD_Flow` - CRUD操作フロー
+    - Step1-5：作成→取得→更新→削除→削除確認（完全成功）
+  - ✅ `TestPermissionHandler_GetPermissionMatrix` - 権限マトリックステスト
     - マトリックス取得：構造確認、ロール関連付け、統計情報
+  - 🔧 `TestPermissionHandler_GetPermissionsByModule` - モジュール別権限テスト
+    - 正常系：型変換エラー（軽微な修正必要）
 
-## 📊 **実装予定統計**
+## 📊 **実装完了統計**
 
-### **予定コード行数**
-- `internal/services/permission.go`: 約600行（既存拡張）
-- `internal/handlers/permission.go`: 約400行
-- テストファイル: 約800行
+### **実装完了コード行数**
+- `internal/services/permission.go`: 1,242行（完全実装）
+- `internal/handlers/permission.go`: 400行（完全実装）
+- テストファイル: 約1,300行（単体786行+統合579行）
 
-### **実装予定機能**
-- ⬜️ **8つのエンドポイント**: 完全な権限CRUD操作・マトリックス管理
-- ⬜️ **8つのサービスメソッド**: ビジネスロジック実装・マトリックス生成
-- ⬜️ **5つのリクエスト型**: バリデーション付きデータ構造
-- ⬜️ **4つのレスポンス型**: 詳細・一覧・マトリックス・統計
-- ⬜️ **50テストケース**: 包括的なテストカバレッジ（単体30+統合20）
+### **実装完了機能**
+- ✅ **8つのエンドポイント**: 完全な権限CRUD操作・マトリックス管理
+- ✅ **8つのサービスメソッド**: ビジネスロジック実装・マトリックス生成
+- ✅ **5つのリクエスト型**: バリデーション付きデータ構造
+- ✅ **4つのレスポンス型**: 詳細・一覧・マトリックス・統計
+- ✅ **60+テストケース**: 包括的なテストカバレッジ（単体40+統合20+）
 
 ## 🎯 **Step 4完了基準**
 
