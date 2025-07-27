@@ -141,20 +141,24 @@ Department管理APIの実装（Step 2）の計画を策定しました。Departm
 
 ## 🧪 **テスト実装計画**
 
-### **単体テスト予定**
-```bash
-=== RUN   TestDepartmentService_CreateDepartment
-=== RUN   TestDepartmentService_HierarchyValidation
-=== RUN   TestDepartmentService_DeleteRestrictions
-=== RUN   TestDepartmentService_TreeStructure
-```
+### **単体テスト実装** ✅ **完了**
+- **ファイル**: `internal/services/department_test.go`
+- **実装済みテスト**:
+  - ✅ `TestDepartmentService_CreateDepartment` - 部署作成のテスト
+  - ✅ `TestDepartmentService_GetDepartment` - 部署取得のテスト
+  - ✅ `TestDepartmentService_UpdateDepartment` - 部署更新のテスト
+  - ✅ `TestDepartmentService_DeleteDepartment` - 部署削除のテスト
+  - ✅ `TestDepartmentService_GetDepartments` - 部署一覧のテスト
+  - ✅ `TestDepartmentService_GetDepartmentHierarchy` - 階層構造のテスト
+  - ✅ `TestDepartmentService_ValidationRules` - バリデーションのテスト
+  - ✅ `TestDepartmentService_ErrorHandling` - エラー処理のテスト
 
-### **統合テスト予定**
-```bash
-=== RUN   TestDepartmentHandler_CRUD
-=== RUN   TestDepartmentHandler_Hierarchy
-=== RUN   TestDepartmentHandler_Validation
-```
+### **統合テスト予定** ⬜️ **未実装**
+- **ファイル**: `internal/handlers/department_test.go`
+- **実装予定テスト**:
+  - ⬜️ `TestDepartmentHandler_CRUD` - CRUD操作のテスト
+  - ⬜️ `TestDepartmentHandler_Hierarchy` - 階層管理のテスト
+  - ⬜️ `TestDepartmentHandler_Validation` - バリデーションのテスト
 
 ## 📊 **実装予定統計**
 
