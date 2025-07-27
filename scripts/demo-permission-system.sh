@@ -122,25 +122,25 @@ demo_department_management() {
     # 1.1 部署作成
     log_step "1.1 部署作成（階層構造）"
     
-    # 親部署作成（本社）
+    # 親部署作成（デモ本社）
     local hq_response=$(curl -s -X POST "$API_BASE/departments" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
         -d '{
-            "name": "本社",
-            "description": "本社部署"
+            "name": "デモ本社",
+            "description": "デモ用本社部署"
         }')
     
     local hq_id=$(echo "$hq_response" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
     show_response "本社部署作成" "$hq_response"
     
-    # 子部署作成（営業部）
+    # 子部署作成（デモ営業部）
     local sales_response=$(curl -s -X POST "$API_BASE/departments" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{
-            \"name\": \"営業部\",
-            \"description\": \"営業部署\",
+            \"name\": \"デモ営業部\",
+            \"description\": \"デモ用営業部署\",
             \"parent_id\": \"$hq_id\"
         }")
     
@@ -182,8 +182,8 @@ demo_role_management() {
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
         -d '{
-            "name": "システム管理者",
-            "description": "全システム管理権限を持つロール"
+            "name": "デモシステム管理者",
+            "description": "デモ用全システム管理権限を持つロール"
         }')
     
     local admin_role_id=$(echo "$admin_role_response" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
@@ -194,8 +194,8 @@ demo_role_management() {
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{
-            \"name\": \"営業マネージャー\",
-            \"description\": \"営業部門管理者\",
+            \"name\": \"デモ営業マネージャー\",
+            \"description\": \"デモ用営業部門管理者\",
             \"parent_id\": \"$admin_role_id\"
         }")
     
@@ -207,8 +207,8 @@ demo_role_management() {
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{
-            \"name\": \"一般ユーザー\",
-            \"description\": \"基本的な操作権限\",
+            \"name\": \"デモ一般ユーザー\",
+            \"description\": \"デモ用基本的な操作権限\",
             \"parent_id\": \"$sales_mgr_id\"
         }")
     
@@ -264,18 +264,18 @@ demo_permission_management() {
     local dept_manage_id=$(echo "$dept_manage_perm" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
     show_response "部署管理権限" "$dept_manage_perm"
     
-    # 営業データ権限
-    local sales_read_perm=$(curl -s -X POST "$API_BASE/permissions" \
+    # 注文データ権限
+    local orders_read_perm=$(curl -s -X POST "$API_BASE/permissions" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
         -d '{
-            "module": "sales",
+            "module": "orders",
             "action": "read",
-            "description": "営業データ閲覧権限"
+            "description": "注文データ閲覧権限"
         }')
     
-    local sales_read_id=$(echo "$sales_read_perm" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
-    show_response "営業データ閲覧権限" "$sales_read_perm"
+    local orders_read_id=$(echo "$orders_read_perm" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+    show_response "注文データ閲覧権限" "$orders_read_perm"
     
     # 3.2 権限マトリックス表示
     log_step "3.2 権限マトリックス表示"
@@ -304,7 +304,7 @@ demo_permission_management() {
     # グローバル変数に保存
     PERM_USER_CREATE_ID="$user_create_id"
     PERM_DEPT_MANAGE_ID="$dept_manage_id"
-    PERM_SALES_READ_ID="$sales_read_id"
+    PERM_ORDERS_READ_ID="$orders_read_id"
 }
 
 # =============================================================================
@@ -323,7 +323,7 @@ demo_role_permission_assignment() {
             \"permission_ids\": [
                 \"$PERM_USER_CREATE_ID\",
                 \"$PERM_DEPT_MANAGE_ID\",
-                \"$PERM_SALES_READ_ID\"
+                \"$PERM_ORDERS_READ_ID\"
             ]
         }")
     
@@ -337,7 +337,7 @@ demo_role_permission_assignment() {
         -H "Content-Type: application/json" \
         -d "{
             \"permission_ids\": [
-                \"$PERM_SALES_READ_ID\"
+                \"$PERM_ORDERS_READ_ID\"
             ]
         }")
     
