@@ -727,3 +727,232 @@ func TestRoleService_HierarchyManagement(t *testing.T) {
 		assert.Equal(t, 2, level) // 孫はレベル2
 	})
 }
+
+// TestRoleService_CRUDOperations CRUD操作のテスト
+func TestRoleService_CRUDOperations(t *testing.T) {
+	svc, db := setupTestRole(t)
+
+	t.Run("Create操作", func(t *testing.T) {
+		t.Run("正常系: 基本的なロール作成", func(t *testing.T) {
+			req := CreateRoleRequest{
+				Name: "テストロール",
+			}
+
+			resp, err := svc.CreateRole(req)
+			require.NoError(t, err)
+			assert.Equal(t, "テストロール", resp.Name)
+			assert.NotEqual(t, uuid.Nil, resp.ID)
+			assert.Nil(t, resp.ParentID)
+			assert.NotZero(t, resp.CreatedAt)
+		})
+
+		t.Run("正常系: 親ロール付きロール作成", func(t *testing.T) {
+			// 親ロール作成
+			parent := createTestRole(t, db, "親ロール", nil)
+
+			req := CreateRoleRequest{
+				Name:     "子ロール",
+				ParentID: &parent.ID,
+			}
+
+			resp, err := svc.CreateRole(req)
+			require.NoError(t, err)
+			assert.Equal(t, "子ロール", resp.Name)
+			assert.NotNil(t, resp.ParentID)
+			assert.Equal(t, parent.ID, *resp.ParentID)
+		})
+	})
+
+	t.Run("Read操作", func(t *testing.T) {
+		role := createTestRole(t, db, "読み取りテストロール", nil)
+
+		t.Run("正常系: 存在するロール取得", func(t *testing.T) {
+			resp, err := svc.GetRole(role.ID)
+			require.NoError(t, err)
+			assert.Equal(t, role.ID, resp.ID)
+			assert.Equal(t, "読み取りテストロール", resp.Name)
+		})
+
+		t.Run("異常系: 存在しないロール取得", func(t *testing.T) {
+			nonExistentID := uuid.New()
+			_, err := svc.GetRole(nonExistentID)
+			assert.Error(t, err)
+			assert.True(t, errors.IsNotFound(err))
+		})
+	})
+
+	t.Run("Update操作", func(t *testing.T) {
+		role := createTestRole(t, db, "更新テストロール", nil)
+
+		t.Run("正常系: ロール名更新", func(t *testing.T) {
+			newName := "更新後ロール名"
+			req := UpdateRoleRequest{
+				Name: &newName,
+			}
+
+			resp, err := svc.UpdateRole(role.ID, req)
+			require.NoError(t, err)
+			assert.Equal(t, "更新後ロール名", resp.Name)
+			assert.Equal(t, role.ID, resp.ID)
+		})
+
+		t.Run("正常系: 親ロール設定", func(t *testing.T) {
+			parent := createTestRole(t, db, "新しい親ロール", nil)
+			req := UpdateRoleRequest{
+				ParentID: &parent.ID,
+			}
+
+			resp, err := svc.UpdateRole(role.ID, req)
+			require.NoError(t, err)
+			assert.NotNil(t, resp.ParentID)
+			assert.Equal(t, parent.ID, *resp.ParentID)
+		})
+
+		t.Run("異常系: 存在しないロール更新", func(t *testing.T) {
+			nonExistentID := uuid.New()
+			newName := "存在しないロール"
+			req := UpdateRoleRequest{
+				Name: &newName,
+			}
+
+			_, err := svc.UpdateRole(nonExistentID, req)
+			assert.Error(t, err)
+			assert.True(t, errors.IsNotFound(err))
+		})
+	})
+
+	t.Run("Delete操作", func(t *testing.T) {
+		t.Run("正常系: 基本的なロール削除", func(t *testing.T) {
+			role := createTestRole(t, db, "削除テストロール", nil)
+
+			err := svc.DeleteRole(role.ID)
+			require.NoError(t, err)
+
+			// 削除確認
+			_, err = svc.GetRole(role.ID)
+			assert.Error(t, err)
+			assert.True(t, errors.IsNotFound(err))
+		})
+
+		t.Run("異常系: 存在しないロール削除", func(t *testing.T) {
+			nonExistentID := uuid.New()
+			err := svc.DeleteRole(nonExistentID)
+			assert.Error(t, err)
+			assert.True(t, errors.IsNotFound(err))
+		})
+	})
+
+	t.Run("List操作", func(t *testing.T) {
+		// テストロールを複数作成
+		role1 := createTestRole(t, db, "リストテスト1", nil)
+		_ = createTestRole(t, db, "リストテスト2", nil)
+		child1 := createTestRole(t, db, "子ロール1", &role1.ID)
+
+		t.Run("正常系: 全ロール取得", func(t *testing.T) {
+			resp, err := svc.GetRoles(1, 10, nil, nil, "")
+			require.NoError(t, err)
+			assert.GreaterOrEqual(t, len(resp.Roles), 3) // 最低3つのロールが存在
+			assert.GreaterOrEqual(t, resp.Total, int64(3))
+		})
+
+		t.Run("正常系: 親ロールフィルタ", func(t *testing.T) {
+			resp, err := svc.GetRoles(1, 10, &role1.ID, nil, "")
+			require.NoError(t, err)
+			assert.Len(t, resp.Roles, 1)
+			assert.Equal(t, child1.ID, resp.Roles[0].ID)
+		})
+
+		t.Run("正常系: 検索フィルタ", func(t *testing.T) {
+			resp, err := svc.GetRoles(1, 10, nil, nil, "リストテスト")
+			require.NoError(t, err)
+			assert.GreaterOrEqual(t, len(resp.Roles), 2) // "リストテスト1", "リストテスト2"
+		})
+
+		t.Run("正常系: ページング", func(t *testing.T) {
+			resp, err := svc.GetRoles(1, 1, nil, nil, "")
+			require.NoError(t, err)
+			assert.Len(t, resp.Roles, 1)
+			assert.Equal(t, 1, resp.Page)
+			assert.Equal(t, 1, resp.Limit)
+		})
+	})
+}
+
+// TestRoleService_PermissionManagement 権限管理のテスト
+func TestRoleService_PermissionManagement(t *testing.T) {
+	svc, db := setupTestRole(t)
+
+	t.Run("権限割り当て操作", func(t *testing.T) {
+		role := createTestRole(t, db, "権限テストロール", nil)
+
+		t.Run("正常系: 空の権限割り当て", func(t *testing.T) {
+			req := AssignPermissionsRequest{
+				PermissionIDs: []uuid.UUID{},
+				Replace:       true,
+			}
+
+			resp, err := svc.AssignPermissions(role.ID, req)
+			require.NoError(t, err)
+			assert.Equal(t, role.ID, resp.RoleID)
+			assert.Len(t, resp.DirectPermissions, 0)
+		})
+
+		t.Run("異常系: 存在しないロールに権限割り当て", func(t *testing.T) {
+			nonExistentID := uuid.New()
+			req := AssignPermissionsRequest{
+				PermissionIDs: []uuid.UUID{},
+				Replace:       true,
+			}
+
+			_, err := svc.AssignPermissions(nonExistentID, req)
+			assert.Error(t, err)
+			assert.True(t, errors.IsNotFound(err))
+		})
+	})
+
+	t.Run("権限取得操作", func(t *testing.T) {
+		role := createTestRole(t, db, "権限取得テストロール", nil)
+
+		t.Run("正常系: ロール権限取得", func(t *testing.T) {
+			resp, err := svc.GetRolePermissions(role.ID)
+			require.NoError(t, err)
+			assert.Equal(t, role.ID, resp.RoleID)
+			assert.Equal(t, "権限取得テストロール", resp.RoleName)
+			assert.Len(t, resp.DirectPermissions, 0)
+			assert.Len(t, resp.InheritedPermissions, 0)
+			assert.Len(t, resp.AllPermissions, 0)
+		})
+
+		t.Run("異常系: 存在しないロールの権限取得", func(t *testing.T) {
+			nonExistentID := uuid.New()
+			_, err := svc.GetRolePermissions(nonExistentID)
+			assert.Error(t, err)
+			assert.True(t, errors.IsNotFound(err))
+		})
+	})
+
+	t.Run("階層ツリー取得", func(t *testing.T) {
+		// 階層構造作成
+		root := createTestRole(t, db, "ツリールート", nil)
+		child := createTestRole(t, db, "ツリー子", &root.ID)
+		_ = createTestRole(t, db, "ツリー孫", &child.ID)
+
+		t.Run("正常系: 階層ツリー取得", func(t *testing.T) {
+			resp, err := svc.GetRoleHierarchy()
+			require.NoError(t, err)
+			assert.GreaterOrEqual(t, len(resp.Roles), 1)
+
+			// ルートロールを検索
+			var rootNode *RoleHierarchyNode
+			for i := range resp.Roles {
+				if resp.Roles[i].Name == "ツリールート" {
+					rootNode = &resp.Roles[i]
+					break
+				}
+			}
+			require.NotNil(t, rootNode)
+			assert.Equal(t, 0, rootNode.Level)
+			assert.GreaterOrEqual(t, len(rootNode.Children), 1)
+		})
+	})
+}
