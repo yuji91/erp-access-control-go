@@ -265,17 +265,17 @@ func setupUserRoutes(group *gin.RouterGroup, userService *services.UserService, 
 
 	users := group.Group("/users")
 	{
-		// ユーザーCRUD
-		users.POST("", userHandler.CreateUser)       // POST /api/v1/users
-		users.GET("", userHandler.GetUsers)          // GET /api/v1/users
-		users.GET("/:id", userHandler.GetUser)       // GET /api/v1/users/:id
-		users.PUT("/:id", userHandler.UpdateUser)    // PUT /api/v1/users/:id
-		users.DELETE("/:id", userHandler.DeleteUser) // DELETE /api/v1/users/:id
+		// ユーザーCRUD（権限チェック付き）
+		users.POST("", middleware.RequirePermissions("user:create"), userHandler.CreateUser)       // POST /api/v1/users
+		users.GET("", middleware.RequirePermissions("user:list"), userHandler.GetUsers)            // GET /api/v1/users
+		users.GET("/:id", middleware.RequirePermissions("user:read"), userHandler.GetUser)         // GET /api/v1/users/:id
+		users.PUT("/:id", middleware.RequirePermissions("user:update"), userHandler.UpdateUser)    // PUT /api/v1/users/:id
+		users.DELETE("/:id", middleware.RequirePermissions("user:delete"), userHandler.DeleteUser) // DELETE /api/v1/users/:id
 
-		// ステータス変更
-		users.PUT("/:id/status", userHandler.ChangeUserStatus) // PUT /api/v1/users/:id/status
+		// ステータス変更（管理者権限）
+		users.PUT("/:id/status", middleware.RequirePermissions("user:manage"), userHandler.ChangeUserStatus) // PUT /api/v1/users/:id/status
 
-		// パスワード変更
+		// パスワード変更（自己のみ）
 		users.PUT("/:id/password", userHandler.ChangePassword) // PUT /api/v1/users/:id/password
 	}
 }

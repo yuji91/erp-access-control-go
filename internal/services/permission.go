@@ -40,16 +40,16 @@ const (
 type Action string
 
 const (
-	ActionCreate Action = "create"
-	ActionRead   Action = "read"
-	ActionUpdate Action = "update"
-	ActionDelete Action = "delete"
-	ActionList   Action = "list"
-	ActionManage Action = "manage"
-	ActionView   Action = "view"
+	ActionCreate  Action = "create"
+	ActionRead    Action = "read"
+	ActionUpdate  Action = "update"
+	ActionDelete  Action = "delete"
+	ActionList    Action = "list"
+	ActionManage  Action = "manage"
+	ActionView    Action = "view"
 	ActionApprove Action = "approve"
-	ActionExport Action = "export"
-	ActionAdmin  Action = "admin"
+	ActionExport  Action = "export"
+	ActionAdmin   Action = "admin"
 )
 
 // Permission 権限文字列を表す
@@ -159,40 +159,28 @@ func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, erro
 	// - バッチ権限取得機能 (複数ユーザー一括処理)
 	// - 権限変更時のキャッシュ無効化戦略
 
-	fmt.Printf("DEBUG: GetUserPermissions called for user ID: %s\n", userID)
-
 	var user models.User
 	if err := s.db.Preload("UserRoles.Role.Permissions").Preload("PrimaryRole.Permissions").First(&user, userID).Error; err != nil {
-		fmt.Printf("DEBUG: Error loading user: %v\n", err)
 		return nil, err
 	}
-
-	fmt.Printf("DEBUG: User loaded successfully - UserRoles count: %d\n", len(user.UserRoles))
 
 	permissionSet := make(map[string]bool)
 
 	// 複数ロールから権限を集約
-	for i, userRole := range user.UserRoles {
-		fmt.Printf("DEBUG: Processing UserRole[%d] - Role: %s, IsValidNow: %t\n", i, userRole.Role.Name, userRole.IsValidNow())
-		
+	for _, userRole := range user.UserRoles {
 		// アクティブで有効期間内のロールのみ処理
 		if !userRole.IsValidNow() {
-			fmt.Printf("DEBUG: Skipping invalid UserRole[%d]\n", i)
 			continue
 		}
 
 		// Get base permissions from matrix for each role
 		if basePerms, exists := PermissionMatrix[userRole.Role.Name]; exists {
-			fmt.Printf("DEBUG: Found permissions in matrix for role '%s': %d permissions\n", userRole.Role.Name, len(basePerms))
 			for _, perm := range basePerms {
 				permissionSet[string(perm)] = true
 			}
-		} else {
-			fmt.Printf("DEBUG: No permissions found in matrix for role '%s'\n", userRole.Role.Name)
 		}
 
 		// Add explicit permissions from database for each role
-		fmt.Printf("DEBUG: Database permissions for role '%s': %d permissions\n", userRole.Role.Name, len(userRole.Role.Permissions))
 		for _, perm := range userRole.Role.Permissions {
 			permissionSet[perm.GetUniqueKey()] = true
 		}
@@ -219,7 +207,7 @@ func (s *PermissionService) GetUserPermissions(userID uuid.UUID) ([]string, erro
 // GetUserRoleHierarchyPermissions 階層ロール権限を含めて取得
 func (s *PermissionService) GetUserRoleHierarchyPermissions(userID uuid.UUID) ([]string, error) {
 	var permissions []string
-	
+
 	query := `
 		WITH RECURSIVE role_hierarchy AS (
 			-- アクティブなユーザーロール
@@ -244,7 +232,7 @@ func (s *PermissionService) GetUserRoleHierarchyPermissions(userID uuid.UUID) ([
 		JOIN role_hierarchy rh ON rp.role_id = rh.role_id
 		ORDER BY permission
 	`
-	
+
 	err := s.db.Raw(query, userID).Pluck("permission", &permissions).Error
 	return permissions, err
 }
@@ -255,16 +243,16 @@ func (s *PermissionService) CheckPermission(userID uuid.UUID, requiredPermission
 	// - 権限チェックの詳細ログ (成功/失敗、リソース、時刻)
 	// - セキュリティアラート (権限昇格試行、異常パターン)
 	// - パフォーマンスメトリクス (応答時間、呼び出し頻度)
-	
+
 	permissions, err := s.GetUserPermissions(userID)
 	if err != nil {
 		return false, err
 	}
 
 	hasPermission := s.hasPermission(permissions, requiredPermission)
-	
+
 	// TODO: ログ出力実装
-	// log.Info("Permission check", zap.String("user_id", userID.String()), 
+	// log.Info("Permission check", zap.String("user_id", userID.String()),
 	//     zap.String("permission", requiredPermission), zap.Bool("granted", hasPermission))
 
 	return hasPermission, nil
