@@ -144,14 +144,21 @@ Department管理APIの実装（Step 2）の計画を策定しました。Departm
 ### **単体テスト実装** ✅ **完了**
 - **ファイル**: `internal/services/department_test.go`
 - **実装済みテスト**:
-  - ✅ `TestDepartmentService_CreateDepartment` - 部署作成のテスト
-  - ✅ `TestDepartmentService_GetDepartment` - 部署取得のテスト
-  - ✅ `TestDepartmentService_UpdateDepartment` - 部署更新のテスト
-  - ✅ `TestDepartmentService_DeleteDepartment` - 部署削除のテスト
-  - ✅ `TestDepartmentService_GetDepartments` - 部署一覧のテスト
-  - ✅ `TestDepartmentService_GetDepartmentHierarchy` - 階層構造のテスト
-  - ✅ `TestDepartmentService_ValidationRules` - バリデーションのテスト
-  - ✅ `TestDepartmentService_ErrorHandling` - エラー処理のテスト
+  - ✅ `TestDepartmentService_CreateDepartment` - 部署作成のテスト（4サブテスト）
+  - ✅ `TestDepartmentService_GetDepartment` - 部署取得のテスト（3サブテスト）
+  - ✅ `TestDepartmentService_UpdateDepartment` - 部署更新のテスト（4サブテスト）
+  - 🔄 `TestDepartmentService_DeleteDepartment` - 部署削除のテスト（2/3サブテスト成功）
+  - 🔄 `TestDepartmentService_GetDepartments` - 部署一覧のテスト（3/4サブテスト成功）
+  - 🔄 `TestDepartmentService_GetDepartmentHierarchy` - 階層構造のテスト（1/2サブテスト成功）
+  - 🔄 `TestDepartmentService_ValidationRules` - バリデーションのテスト（1/2サブテスト成功）
+  - 🔄 `TestDepartmentService_ErrorHandling` - エラー処理のテスト（2/3サブテスト成功）
+
+### **テスト実行結果**
+- **成功率**: 約70% (18/26のサブテスト成功)
+- **主な問題**:
+  - テストデータの分離（各テストが前のテストのデータを参照）
+  - SQLiteでのUUID型サポート問題
+  - バリデーションのタイミング（GinのBindingはテスト環境では実行されない）
 
 ### **統合テスト予定** ⬜️ **未実装**
 - **ファイル**: `internal/handlers/department_test.go`
