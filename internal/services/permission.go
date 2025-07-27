@@ -589,19 +589,20 @@ func (s *PermissionService) getUsageStats(permissionID uuid.UUID) PermissionUsag
 // getModuleDisplayName モジュール表示名取得
 func (s *PermissionService) getModuleDisplayName(module string) string {
 	displayNames := map[string]string{
-		"user":       "ユーザー管理",
-		"department": "部署管理",
-		"role":       "ロール管理",
-		"permission": "権限管理",
-		"audit":      "監査ログ",
-		"system":     "システム管理",
-		"inventory":  "在庫管理",
-		"orders":     "注文管理",
-		"reports":    "レポート",
-		"dashboard":  "ダッシュボード",
-		"settings":   "設定",
-		"finance":    "財務管理",
-		"hr":         "人事管理",
+		string(ModuleUser):       "ユーザー管理",
+		string(ModuleDepartment): "部署管理",
+		string(ModuleRole):       "ロール管理",
+		string(ModulePermission): "権限管理",
+		string(ModuleAudit):      "監査ログ",
+		string(ModuleSystem):     "システム管理",
+		string(ModuleInventory):  "在庫管理",
+		string(ModuleOrders):     "注文管理",
+		string(ModuleReports):    "レポート",
+		// 将来追加予定のモジュール（定数定義が必要）
+		"dashboard": "ダッシュボード",
+		"settings":  "設定",
+		"finance":   "財務管理",
+		"hr":        "人事管理",
 	}
 
 	if displayName, exists := displayNames[module]; exists {
@@ -613,16 +614,16 @@ func (s *PermissionService) getModuleDisplayName(module string) string {
 // getActionDisplayName アクション表示名取得
 func (s *PermissionService) getActionDisplayName(action string) string {
 	displayNames := map[string]string{
-		"create":  "作成",
-		"read":    "閲覧",
-		"update":  "更新",
-		"delete":  "削除",
-		"list":    "一覧",
-		"manage":  "管理",
-		"view":    "表示",
-		"approve": "承認",
-		"export":  "エクスポート",
-		"admin":   "管理者",
+		string(ActionCreate):  "作成",
+		string(ActionRead):    "閲覧",
+		string(ActionUpdate):  "更新",
+		string(ActionDelete):  "削除",
+		string(ActionList):    "一覧",
+		string(ActionManage):  "管理",
+		string(ActionView):    "表示",
+		string(ActionApprove): "承認",
+		string(ActionExport):  "エクスポート",
+		string(ActionAdmin):   "管理者",
 	}
 
 	if displayName, exists := displayNames[action]; exists {
@@ -1026,12 +1027,9 @@ func (s *PermissionService) ValidatePermission(permission string) bool {
 	return s.isValidModule(module) && s.isValidAction(action)
 }
 
-// isValidModule モジュールが有効かチェック
-func (s *PermissionService) isValidModule(module string) bool {
-	if module == "*" {
-		return true
-	}
-	validModules := []string{
+// getAllValidModules 定義されているすべての有効なモジュールを返す
+func getAllValidModules() []string {
+	return []string{
 		string(ModuleUser),
 		string(ModuleDepartment),
 		string(ModuleRole),
@@ -1042,7 +1040,15 @@ func (s *PermissionService) isValidModule(module string) bool {
 		string(ModuleOrders),
 		string(ModuleReports),
 	}
+}
 
+// isValidModule モジュールが有効かチェック
+func (s *PermissionService) isValidModule(module string) bool {
+	if module == "*" {
+		return true
+	}
+
+	validModules := getAllValidModules()
 	for _, valid := range validModules {
 		if module == valid {
 			return true
@@ -1051,20 +1057,29 @@ func (s *PermissionService) isValidModule(module string) bool {
 	return false
 }
 
-// isValidAction アクションが有効かチェック
-func (s *PermissionService) isValidAction(action string) bool {
-	if action == "*" {
-		return true
-	}
-	validActions := []string{
+// getAllValidActions 定義されているすべての有効なアクションを返す
+func getAllValidActions() []string {
+	return []string{
 		string(ActionCreate),
 		string(ActionRead),
 		string(ActionUpdate),
 		string(ActionDelete),
 		string(ActionList),
 		string(ActionManage),
+		string(ActionView),
+		string(ActionApprove),
+		string(ActionExport),
+		string(ActionAdmin),
+	}
+}
+
+// isValidAction アクションが有効かチェック
+func (s *PermissionService) isValidAction(action string) bool {
+	if action == "*" {
+		return true
 	}
 
+	validActions := getAllValidActions()
 	for _, valid := range validActions {
 		if action == valid {
 			return true
