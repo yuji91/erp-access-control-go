@@ -103,6 +103,7 @@ func initServices(db *gorm.DB, cfg *config.Config) *ServiceContainer {
 	userRoleService := services.NewUserRoleService(db)
 	userService := services.NewUserService(db, appLogger)
 	departmentService := services.NewDepartmentService(db, appLogger)
+	roleService := services.NewRoleService(db, appLogger)
 
 	// 認証サービス
 	authService := services.NewAuthService(
@@ -119,6 +120,7 @@ func initServices(db *gorm.DB, cfg *config.Config) *ServiceContainer {
 		UserRole:   userRoleService,
 		User:       userService,
 		Department: departmentService,
+		Role:       roleService,
 		JWT:        jwtService,
 	}
 }
@@ -181,6 +183,9 @@ func setupRoutes(services *ServiceContainer, middlewares *MiddlewareContainer, a
 
 			// 部署管理
 			setupDepartmentRoutes(protected, services.Department, appLogger)
+
+			// ロール管理
+			setupRoleRoutes(protected, services.Role, appLogger)
 		}
 	}
 
@@ -244,6 +249,14 @@ func setupBasicRoutes(router *gin.Engine) {
 				"GET /api/v1/departments/{id}      - 部署詳細",
 				"PUT /api/v1/departments/{id}      - 部署更新",
 				"DELETE /api/v1/departments/{id}   - 部署削除",
+				"POST /api/v1/roles                - ロール作成",
+				"GET /api/v1/roles                 - ロール一覧",
+				"GET /api/v1/roles/hierarchy       - ロール階層構造",
+				"GET /api/v1/roles/{id}            - ロール詳細",
+				"PUT /api/v1/roles/{id}            - ロール更新",
+				"DELETE /api/v1/roles/{id}         - ロール削除",
+				"PUT /api/v1/roles/{id}/permissions - 権限割り当て",
+				"GET /api/v1/roles/{id}/permissions - ロール権限一覧",
 			},
 		})
 	})
@@ -317,6 +330,23 @@ func setupDepartmentRoutes(group *gin.RouterGroup, departmentService *services.D
 	}
 }
 
+// setupRoleRoutes ロール管理エンドポイントを設定
+func setupRoleRoutes(group *gin.RouterGroup, roleService *services.RoleService, appLogger *logger.Logger) {
+	roleHandler := handlers.NewRoleHandler(roleService, appLogger)
+
+	roles := group.Group("/roles")
+	{
+		roles.POST("", middleware.RequirePermissions("role:create"), roleHandler.CreateRole)                       // POST /api/v1/roles
+		roles.GET("", middleware.RequirePermissions("role:list"), roleHandler.GetRoles)                            // GET /api/v1/roles
+		roles.GET("/hierarchy", middleware.RequirePermissions("role:list"), roleHandler.GetRoleHierarchy)          // GET /api/v1/roles/hierarchy
+		roles.GET("/:id", middleware.RequirePermissions("role:read"), roleHandler.GetRole)                         // GET /api/v1/roles/:id
+		roles.PUT("/:id", middleware.RequirePermissions("role:update"), roleHandler.UpdateRole)                    // PUT /api/v1/roles/:id
+		roles.DELETE("/:id", middleware.RequirePermissions("role:delete"), roleHandler.DeleteRole)                 // DELETE /api/v1/roles/:id
+		roles.PUT("/:id/permissions", middleware.RequirePermissions("role:manage"), roleHandler.AssignPermissions) // PUT /api/v1/roles/:id/permissions
+		roles.GET("/:id/permissions", middleware.RequirePermissions("role:read"), roleHandler.GetRolePermissions)  // GET /api/v1/roles/:id/permissions
+	}
+}
+
 // startServer サーバーを起動
 func startServer(router *gin.Engine, port string) {
 	if port == "" {
@@ -342,6 +372,7 @@ type ServiceContainer struct {
 	UserRole   *services.UserRoleService
 	User       *services.UserService
 	Department *services.DepartmentService
+	Role       *services.RoleService
 	JWT        *jwt.Service
 }
 
