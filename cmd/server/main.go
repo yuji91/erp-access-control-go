@@ -320,9 +320,9 @@ func setupUserRoleRoutes(group *gin.RouterGroup, userRoleService *services.UserR
 	userRoleHandler := handlers.NewUserRoleHandler(userRoleService)
 
 	group.POST("/users/roles", userRoleHandler.AssignRole)
-	group.GET("/users/:user_id/roles", userRoleHandler.GetUserRoles)
-	group.PATCH("/users/:user_id/roles/:role_id", userRoleHandler.UpdateRole)
-	group.DELETE("/users/:user_id/roles/:role_id", userRoleHandler.RevokeRole)
+	group.GET("/users/:id/roles", userRoleHandler.GetUserRoles)
+	group.PATCH("/users/:id/roles/:role_id", userRoleHandler.UpdateRole)
+	group.DELETE("/users/:id/roles/:role_id", userRoleHandler.RevokeRole)
 }
 
 // setupDepartmentRoutes 部署管理エンドポイントを設定

@@ -102,7 +102,7 @@ func (h *UserRoleHandler) AssignRole(c *gin.Context) {
 
 // RevokeRole ユーザーのロールを取り消し
 func (h *UserRoleHandler) RevokeRole(c *gin.Context) {
-	userIDStr := c.Param("user_id")
+	userIDStr := c.Param("id")
 	roleIDStr := c.Param("role_id")
 
 	userID, err := uuid.Parse(userIDStr)
@@ -150,7 +150,7 @@ func (h *UserRoleHandler) RevokeRole(c *gin.Context) {
 
 // UpdateRole ユーザーロールを更新
 func (h *UserRoleHandler) UpdateRole(c *gin.Context) {
-	userIDStr := c.Param("user_id")
+	userIDStr := c.Param("id")
 	roleIDStr := c.Param("role_id")
 
 	userID, err := uuid.Parse(userIDStr)
@@ -197,7 +197,7 @@ func (h *UserRoleHandler) UpdateRole(c *gin.Context) {
 
 // GetUserRoles ユーザーのロール一覧を取得
 func (h *UserRoleHandler) GetUserRoles(c *gin.Context) {
-	userIDStr := c.Param("user_id")
+	userIDStr := c.Param("id")
 	activeOnly := c.Query("active") == "true"
 
 	userID, err := uuid.Parse(userIDStr)
