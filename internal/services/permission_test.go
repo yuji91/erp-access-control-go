@@ -82,8 +82,8 @@ func setupTestPermission(t *testing.T) (*PermissionService, *gorm.DB) {
 	return service, db
 }
 
-// createTestPermissionForPermissionService テスト用権限作成ヘルパー
-func createTestPermissionForPermissionService(t *testing.T, db *gorm.DB, module, action string) *models.Permission {
+// createPermissionForPermissionTest テスト用権限作成ヘルパー
+func createPermissionForPermissionTest(t *testing.T, db *gorm.DB, module, action string) *models.Permission {
 	permissionID := uuid.New()
 	err := db.Exec("INSERT INTO permissions (id, module, action, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
 		permissionID.String(), module, action).Error
@@ -97,8 +97,8 @@ func createTestPermissionForPermissionService(t *testing.T, db *gorm.DB, module,
 	return permission
 }
 
-// createTestRoleForPermissionService テスト用ロール作成ヘルパー
-func createTestRoleForPermissionService(t *testing.T, db *gorm.DB, name string, parentID *uuid.UUID) *models.Role {
+// createRoleForPermissionTest テスト用ロール作成ヘルパー
+func createRoleForPermissionTest(t *testing.T, db *gorm.DB, name string, parentID *uuid.UUID) *models.Role {
 	roleID := uuid.New()
 	var parentIDStr interface{}
 	if parentID != nil {
@@ -210,7 +210,7 @@ func TestPermissionService_GetPermission(t *testing.T) {
 
 	t.Run("正常系: 存在する権限取得", func(t *testing.T) {
 		// テスト権限作成
-		permission := createTestPermissionForPermissionService(t, db, "inventory", "update")
+		permission := createPermissionForPermissionTest(t, db, "inventory", "update")
 
 		resp, err := svc.GetPermission(permission.ID)
 
@@ -240,7 +240,7 @@ func TestPermissionService_UpdatePermission(t *testing.T) {
 
 	t.Run("正常系: 説明更新", func(t *testing.T) {
 		// テスト権限作成
-		permission := createTestPermissionForPermissionService(t, db, "inventory", "delete")
+		permission := createPermissionForPermissionTest(t, db, "inventory", "delete")
 		newDescription := "更新された在庫削除権限"
 
 		req := UpdatePermissionRequest{
@@ -256,7 +256,7 @@ func TestPermissionService_UpdatePermission(t *testing.T) {
 
 	t.Run("異常系: システム権限更新", func(t *testing.T) {
 		// システム権限作成
-		permission := createTestPermissionForPermissionService(t, db, "user", "list")
+		permission := createPermissionForPermissionTest(t, db, "user", "list")
 		newDescription := "システム権限変更試行"
 
 		req := UpdatePermissionRequest{
@@ -290,7 +290,7 @@ func TestPermissionService_DeletePermission(t *testing.T) {
 
 	t.Run("正常系: 未使用権限削除", func(t *testing.T) {
 		// テスト権限作成
-		permission := createTestPermissionForPermissionService(t, db, "inventory", "archive")
+		permission := createPermissionForPermissionTest(t, db, "inventory", "archive")
 
 		err := svc.DeletePermission(permission.ID)
 
@@ -299,7 +299,7 @@ func TestPermissionService_DeletePermission(t *testing.T) {
 
 	t.Run("異常系: システム権限削除", func(t *testing.T) {
 		// システム権限作成
-		permission := createTestPermissionForPermissionService(t, db, "permission", "read")
+		permission := createPermissionForPermissionTest(t, db, "permission", "read")
 
 		err := svc.DeletePermission(permission.ID)
 
@@ -309,8 +309,8 @@ func TestPermissionService_DeletePermission(t *testing.T) {
 
 	t.Run("異常系: ロール割り当て済み権限削除", func(t *testing.T) {
 		// テスト権限とロール作成
-		permission := createTestPermissionForPermissionService(t, db, "inventory", "manage")
-		role := createTestRoleForPermissionService(t, db, "在庫マネージャー", nil)
+		permission := createPermissionForPermissionTest(t, db, "inventory", "manage")
+		role := createRoleForPermissionTest(t, db, "在庫マネージャー", nil)
 		assignPermissionToRole(t, db, role.ID, permission.ID)
 
 		err := svc.DeletePermission(permission.ID)
@@ -334,9 +334,9 @@ func TestPermissionService_GetPermissions(t *testing.T) {
 	svc, db := setupTestPermission(t)
 
 	// テストデータ準備
-	perm1 := createTestPermissionForPermissionService(t, db, "inventory", "create")
-	_ = createTestPermissionForPermissionService(t, db, "inventory", "read")
-	createTestPermissionForPermissionService(t, db, "task", "create")
+	perm1 := createPermissionForPermissionTest(t, db, "inventory", "create")
+	_ = createPermissionForPermissionTest(t, db, "inventory", "read")
+	createPermissionForPermissionTest(t, db, "task", "create")
 
 	t.Run("正常系: 全権限取得", func(t *testing.T) {
 		req := GetPermissionsRequest{
@@ -412,7 +412,7 @@ func TestPermissionService_GetPermissions(t *testing.T) {
 
 	t.Run("正常系: ロール使用フィルタ", func(t *testing.T) {
 		// テストロール作成と権限割り当て
-		role := createTestRoleForPermissionService(t, db, "テストロール", nil)
+		role := createRoleForPermissionTest(t, db, "テストロール", nil)
 		assignPermissionToRole(t, db, role.ID, perm1.ID)
 
 		req := GetPermissionsRequest{
@@ -448,12 +448,12 @@ func TestPermissionService_GetPermissionMatrix(t *testing.T) {
 	svc, db := setupTestPermission(t)
 
 	// テストデータ準備
-	perm1 := createTestPermissionForPermissionService(t, db, "inventory", "create")
-	perm2 := createTestPermissionForPermissionService(t, db, "inventory", "read")
-	_ = createTestPermissionForPermissionService(t, db, "task", "create") // unused permission for testing
+	perm1 := createPermissionForPermissionTest(t, db, "inventory", "create")
+	perm2 := createPermissionForPermissionTest(t, db, "inventory", "read")
+	_ = createPermissionForPermissionTest(t, db, "task", "create") // unused permission for testing
 
-	role1 := createTestRoleForPermissionService(t, db, "在庫管理者", nil)
-	role2 := createTestRoleForPermissionService(t, db, "在庫確認者", nil)
+	role1 := createRoleForPermissionTest(t, db, "在庫管理者", nil)
+	role2 := createRoleForPermissionTest(t, db, "在庫確認者", nil)
 
 	// 権限割り当て
 	assignPermissionToRole(t, db, role1.ID, perm1.ID)
@@ -490,9 +490,9 @@ func TestPermissionService_GetPermissionsByModule(t *testing.T) {
 	svc, db := setupTestPermission(t)
 
 	// テストデータ準備
-	createTestPermissionForPermissionService(t, db, "inventory", "create")
-	createTestPermissionForPermissionService(t, db, "inventory", "read")
-	createTestPermissionForPermissionService(t, db, "task", "create")
+	createPermissionForPermissionTest(t, db, "inventory", "create")
+	createPermissionForPermissionTest(t, db, "inventory", "read")
+	createPermissionForPermissionTest(t, db, "task", "create")
 
 	t.Run("正常系: 有効なモジュール", func(t *testing.T) {
 		resp, err := svc.GetPermissionsByModule("inventory")
@@ -518,9 +518,9 @@ func TestPermissionService_GetRolesByPermission(t *testing.T) {
 	svc, db := setupTestPermission(t)
 
 	// テストデータ準備
-	permission := createTestPermissionForPermissionService(t, db, "inventory", "manage")
-	role1 := createTestRoleForPermissionService(t, db, "在庫マネージャー", nil)
-	role2 := createTestRoleForPermissionService(t, db, "チームリーダー", nil)
+	permission := createPermissionForPermissionTest(t, db, "inventory", "manage")
+	role1 := createRoleForPermissionTest(t, db, "在庫マネージャー", nil)
+	role2 := createRoleForPermissionTest(t, db, "チームリーダー", nil)
 
 	// 権限割り当て
 	assignPermissionToRole(t, db, role1.ID, permission.ID)
@@ -573,7 +573,7 @@ func TestPermissionService_SystemPermissionProtection(t *testing.T) {
 			assert.True(t, errors.IsValidationError(err))
 
 			// 既存システム権限での更新・削除試行
-			permission := createTestPermissionForPermissionService(t, db, sp.module, sp.action)
+			permission := createPermissionForPermissionTest(t, db, sp.module, sp.action)
 
 			// 更新試行
 			_, err = svc.UpdatePermission(permission.ID, UpdatePermissionRequest{
