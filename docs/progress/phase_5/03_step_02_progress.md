@@ -6,15 +6,15 @@ Department管理APIの実装（Step 2）の計画を策定しました。Departm
 
 ## ⬜️ **実装予定項目**
 
-### **2.1 DepartmentService実装** ⬜️ **未実装**
+### **2.1 DepartmentService実装** ✅ **完了**
 - **ファイル**: `internal/services/department.go`
-- **実装予定機能**:
-  - ⬜️ `CreateDepartment()` - 部署作成（階層構造対応）
-  - ⬜️ `GetDepartment()` - 部署詳細取得（親子関係込み）
-  - ⬜️ `UpdateDepartment()` - 部署更新（名前・親部署変更）
-  - ⬜️ `DeleteDepartment()` - 部署削除（子部署・所属ユーザーチェック）
-  - ⬜️ `GetDepartments()` - 部署一覧取得（階層表示）
-  - ⬜️ `GetDepartmentHierarchy()` - 部署階層ツリー取得
+- **実装機能**:
+  - ✅ `CreateDepartment()` - 部署作成（階層構造対応）
+  - ✅ `GetDepartment()` - 部署詳細取得（親子関係込み）
+  - ✅ `UpdateDepartment()` - 部署更新（名前・親部署変更）
+  - ✅ `DeleteDepartment()` - 部署削除（子部署・所属ユーザーチェック）
+  - ✅ `GetDepartments()` - 部署一覧取得（階層表示）
+  - ✅ `GetDepartmentHierarchy()` - 部署階層ツリー取得
 
 ### **2.2 DepartmentHandler実装** ⬜️ **未実装**
 - **ファイル**: `internal/handlers/department.go`
