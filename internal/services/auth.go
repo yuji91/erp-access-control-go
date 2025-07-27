@@ -107,8 +107,10 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	}
 
 	// Get user permissions（複数ロール対応）
-	// 一時的に権限取得をスキップ
-	permissions := []string{"user:read", "user:write", "user:delete"}
+	permissions, err := s.permissionService.GetUserPermissions(user.ID)
+	if err != nil {
+		return nil, errors.NewDatabaseError(err)
+	}
 
 	// アクティブロール情報を取得
 	activeRoles, err := user.GetActiveRoles(s.db)
