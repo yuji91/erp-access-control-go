@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"erp-access-control-go/internal/middleware"
 	"erp-access-control-go/internal/services"
 	"erp-access-control-go/models"
 	"erp-access-control-go/pkg/errors"
@@ -144,8 +145,8 @@ func (h *UserRoleHandler) RevokeRole(c *gin.Context) {
 	}
 
 	// リクエストユーザーID取得
-	revokedBy, exists := c.Get("user_id")
-	if !exists {
+	revokedBy, err := middleware.GetCurrentUserID(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, errors.ErrUnauthorized)
 		return
 	}
@@ -162,7 +163,7 @@ func (h *UserRoleHandler) RevokeRole(c *gin.Context) {
 	userRole, err := h.userRoleService.RevokeRole(
 		userID,
 		roleID,
-		revokedBy.(uuid.UUID),
+		revokedBy,
 		reason,
 	)
 	if err != nil {
@@ -213,8 +214,8 @@ func (h *UserRoleHandler) UpdateRole(c *gin.Context) {
 	}
 
 	// リクエストユーザーID取得
-	updatedBy, exists := c.Get("user_id")
-	if !exists {
+	updatedBy, err := middleware.GetCurrentUserID(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, errors.ErrUnauthorized)
 		return
 	}
@@ -224,7 +225,7 @@ func (h *UserRoleHandler) UpdateRole(c *gin.Context) {
 		roleID,
 		req.Priority,
 		req.ValidTo,
-		updatedBy.(uuid.UUID),
+		updatedBy,
 		req.Reason,
 	)
 	if err != nil {

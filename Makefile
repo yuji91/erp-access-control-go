@@ -26,12 +26,13 @@ LOGS_DIR := logs
 COVERAGE_DIR := coverage
 GENERATED_DIR := generated
 
-# データベース設定
+# データベース設定（Docker環境用）
 DB_HOST := localhost
 DB_PORT := 5432
-DB_USER := postgres
+DB_USER := erp_user
 DB_NAME := erp_access_control
 DB_TEST_NAME := erp_access_control_test
+DB_PASSWORD := erp_password_2024
 DB_URL := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable
 DB_TEST_URL := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_TEST_NAME)?sslmode=disable
 
@@ -59,6 +60,12 @@ RESET := \033[0m
 help: ## 📋 利用可能なコマンド一覧を表示
 	@echo "$(CYAN)🔐 ERP Access Control API - Makefile$(RESET)"
 	@echo "$(CYAN)================================================$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)🎯 ポートフォリオ評価者向け推奨コマンド:$(RESET)"
+	@echo "  $(GREEN)make setup-dev-clean$(RESET)     完全クリーンアップ後の環境構築（推奨）"
+	@echo "  $(GREEN)make test-api$(RESET)            API動作確認テスト"
+	@echo "  $(GREEN)make env-check$(RESET)           環境設定確認"
+	@echo "  $(GREEN)make docker-clean-safe$(RESET)   ERPプロジェクトのみクリーンアップ（安全）"
 	@echo ""
 	@echo "$(YELLOW)📦 基本コマンド:$(RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '^(setup|build|run|test|clean):' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
@@ -105,10 +112,33 @@ setup-docker: ## 🐳 Docker環境の完全セットアップ
 .PHONY: setup-dev
 setup-dev: ## 💻 開発環境の完全セットアップ（Docker + アプリ）
 	@echo "$(CYAN)💻 開発環境セットアップ開始...$(RESET)"
+	@echo "$(BLUE)🧹 既存プロセスのクリーンアップ中...$(RESET)"
+	@pkill -f "go run cmd/server/main.go" 2>/dev/null || true
+	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
+	@sleep 2
 	@$(MAKE) setup-docker
-	@echo "$(BLUE)🚀 アプリケーション起動中...$(RESET)"
-	@$(MAKE) run
+	@echo "$(BLUE)🚀 アプリケーション起動中（Docker環境用設定）...$(RESET)"
+	@$(MAKE) run-docker-env
 	@echo "$(GREEN)✅ 開発環境セットアップ完了！$(RESET)"
+
+.PHONY: setup-dev-clean
+setup-dev-clean: ## 💻 完全クリーンアップ後の開発環境セットアップ（推奨）
+	@echo "$(CYAN)💻 完全クリーンアップ後の開発環境セットアップ開始...$(RESET)"
+	@echo "$(BLUE)🧹 完全クリーンアップ実行中...$(RESET)"
+	@pkill -f "go run cmd/server/main.go" 2>/dev/null || true
+	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
+	@$(MAKE) docker-down-safe 2>/dev/null || true
+	@sleep 3
+	@echo "$(BLUE)🐳 クリーンな Docker環境でセットアップ開始...$(RESET)"
+	@$(MAKE) setup-docker
+	@echo "$(BLUE)🚀 アプリケーション起動中（Docker環境用設定）...$(RESET)"
+	@$(MAKE) run-docker-env
+	@echo "$(GREEN)✅ 完全クリーンアップ後の開発環境セットアップ完了！$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)🎉 ポートフォリオデモ用環境が準備できました:$(RESET)"
+	@echo "  📊 API: http://localhost:8080"
+	@echo "  🏥 ヘルスチェック: http://localhost:8080/health"
+	@echo "  🧪 APIテスト実行: make test-api"
 
 .PHONY: setup-dirs
 setup-dirs: ## 📁 必要ディレクトリの作成
@@ -144,9 +174,22 @@ build: ## 🔨 アプリケーションのビルド
 .PHONY: run
 run: ## 🏃 ローカル開発サーバーの起動
 	@echo "$(BLUE)🏃 ローカル開発サーバー起動中...$(RESET)"
+	@echo "$(YELLOW)📡 データベース接続情報:$(RESET)"
+	@echo "  Host: $(DB_HOST)"
+	@echo "  User: $(DB_USER)"
+	@echo "  Database: $(DB_NAME)"
 	@echo "$(YELLOW)⚠️  注意: Docker環境が起動中の場合はポート8080が使用中です$(RESET)"
 	@echo "$(YELLOW)💡 Docker環境停止: make docker-down$(RESET)"
-	@go run cmd/server/main.go
+	@DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) DB_NAME=$(DB_NAME) DB_HOST=$(DB_HOST) go run cmd/server/main.go
+
+.PHONY: run-docker-env
+run-docker-env: ## 🏃 Docker環境用設定でサーバー起動
+	@echo "$(BLUE)🏃 Docker環境用設定でサーバー起動中...$(RESET)"
+	@echo "$(YELLOW)📡 Docker環境データベース接続設定:$(RESET)"
+	@echo "  Host: localhost"
+	@echo "  User: erp_user"
+	@echo "  Database: erp_access_control"
+	@DB_USER=erp_user DB_PASSWORD=erp_password_2024 DB_NAME=erp_access_control DB_HOST=localhost go run cmd/server/main.go
 
 .PHONY: run-build
 run-build: build ## 🏃 ビルド済みバイナリの実行
@@ -300,6 +343,22 @@ test-integration: ## 🧪 統合テスト実行
 	@go test -v ./tests/integration/...
 	@echo "$(GREEN)✅ 統合テスト完了$(RESET)"
 
+.PHONY: test-api
+test-api: ## 🧪 API動作確認（curl）
+	@echo "$(BLUE)🧪 API動作確認開始...$(RESET)"
+	@echo "$(YELLOW)⚠️  サーバーが起動していることを確認してください$(RESET)"
+	@echo "$(YELLOW)   Docker環境でのサーバー起動: make run-docker-env$(RESET)"
+	@echo "$(YELLOW)   通常のサーバー起動: make run$(RESET)"
+	@echo
+	@./scripts/api-test.sh
+	@echo "$(GREEN)✅ API動作確認完了$(RESET)"
+
+.PHONY: test-api-quick
+test-api-quick: ## 🧪 API基本動作確認（ヘルスチェックのみ）
+	@echo "$(BLUE)🧪 API基本動作確認開始...$(RESET)"
+	@curl -s -w "\nHTTP Status: %{http_code}\n" http://localhost:8080/health | jq '.' 2>/dev/null || curl -s -w "\nHTTP Status: %{http_code}\n" http://localhost:8080/health
+	@echo "$(GREEN)✅ API基本動作確認完了$(RESET)"
+
 .PHONY: test-coverage
 test-coverage: ## 📊 テストカバレッジ測定
 	@echo "$(BLUE)📊 カバレッジ測定中...$(RESET)"
@@ -398,6 +457,17 @@ env-check: ## 🔍 環境変数・設定確認
 	@echo "$(YELLOW)Migrate:$(RESET) $$(/Users/yuji91/go/bin/migrate -version 2>&1 || echo 'Not installed')"
 	@echo "$(YELLOW)Redocly:$(RESET) $$(redocly --version 2>/dev/null || echo 'Not installed')"
 	@echo "$(YELLOW)OpenAPI Generator:$(RESET) $$(openapi-generator-cli version 2>/dev/null || echo 'Not installed')"
+	@echo ""
+	@echo "$(YELLOW)📡 データベース環境変数:$(RESET)"
+	@echo "  DB_HOST: $${DB_HOST:-$(DB_HOST) (default)}"
+	@echo "  DB_USER: $${DB_USER:-$(DB_USER) (default)}"
+	@echo "  DB_NAME: $${DB_NAME:-$(DB_NAME) (default)}"
+	@echo "  DB_PASSWORD: $${DB_PASSWORD:-設定済み (default)}"
+	@echo ""
+	@echo "$(YELLOW)🐳 Docker環境推奨設定:$(RESET)"
+	@echo "  export DB_USER=erp_user"
+	@echo "  export DB_PASSWORD=erp_password_2024"
+	@echo "  export DB_NAME=erp_access_control"
 
 # -----------------------------------------------------------------------------
 # Docker・コンテナ関連
@@ -427,16 +497,57 @@ docker-up-all: ## 🚀 Docker Compose起動（全サービス）
 	@echo "$(GREEN)✅ Docker Compose全サービス起動完了$(RESET)"
 
 .PHONY: docker-up-dev
-docker-up-dev: ## 💻 Docker開発環境起動（DB+Redis+App）
+docker-up-dev: ## 💻 Docker開発環境起動（DB+Redis+App+シードデータ）
 	@echo "$(BLUE)💻 Docker開発環境起動中...$(RESET)"
 	@docker-compose --profile app up -d
-	@echo "$(GREEN)✅ Docker開発環境起動完了$(RESET)"
+	@echo "$(BLUE)⏳ PostgreSQL起動待機中...$(RESET)"
+	@sleep 5
+	@echo "$(BLUE)⬆️ マイグレーション実行中...$(RESET)"
+	@$(MAKE) docker-migrate-sql
+	@echo "$(BLUE)🌱 シードデータ投入中...$(RESET)"
+	@$(MAKE) docker-seed
+	@echo "$(GREEN)✅ Docker開発環境起動完了（テストデータ投入済み）$(RESET)"
+	@echo "$(YELLOW)🌐 利用可能なサービス:$(RESET)"
+	@echo "  📊 API: http://localhost:8080"
+	@echo "  🧪 APIテスト実行: make test-api"
 
 .PHONY: docker-down
 docker-down: ## 🛑 Docker Compose停止
 	@echo "$(YELLOW)🛑 Docker Compose停止中...$(RESET)"
 	@docker-compose down --remove-orphans
 	@echo "$(GREEN)✅ Docker Compose停止完了$(RESET)"
+
+.PHONY: docker-down-safe
+docker-down-safe: ## 🛑 ERPプロジェクトのコンテナのみ安全停止
+	@echo "$(YELLOW)🛑 ERPプロジェクトコンテナのみ停止中...$(RESET)"
+	@echo "$(BLUE)🔍 停止対象コンテナ確認:$(RESET)"
+	@docker ps --filter "name=erp-" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null || echo "$(YELLOW)対象コンテナなし$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)📦 コンテナ停止実行中...$(RESET)"
+	@docker stop $$(docker ps -q --filter "name=erp-") 2>/dev/null || echo "$(YELLOW)停止対象コンテナなし$(RESET)"
+	@echo "$(YELLOW)🗑️  コンテナ削除実行中...$(RESET)"
+	@docker rm $$(docker ps -aq --filter "name=erp-") 2>/dev/null || echo "$(YELLOW)削除対象コンテナなし$(RESET)"
+	@echo "$(YELLOW)🌐 ERPネットワーク削除中...$(RESET)"
+	@docker network rm erp-access-control-network 2>/dev/null || echo "$(YELLOW)ネットワーク削除済みまたは不要$(RESET)"
+	@echo "$(GREEN)✅ ERPプロジェクトコンテナ停止完了$(RESET)"
+
+.PHONY: docker-volumes-clean-safe
+docker-volumes-clean-safe: ## 🗑️ ERPプロジェクトのボリュームのみ安全削除
+	@echo "$(YELLOW)🗑️ ERPプロジェクトボリュームのみ削除中...$(RESET)"
+	@echo "$(BLUE)🔍 削除対象ボリューム確認:$(RESET)"
+	@docker volume ls --filter "name=erp-" --format "table {{.Name}}\t{{.Driver}}" 2>/dev/null || echo "$(YELLOW)対象ボリュームなし$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)📦 ボリューム削除実行中...$(RESET)"
+	@docker volume rm $$(docker volume ls -q --filter "name=erp-") 2>/dev/null || echo "$(YELLOW)削除対象ボリュームなし$(RESET)"
+	@echo "$(GREEN)✅ ERPプロジェクトボリューム削除完了$(RESET)"
+
+.PHONY: docker-clean-safe
+docker-clean-safe: ## 🧹 ERPプロジェクトのみ完全クリーンアップ（他プロジェクト保護）
+	@echo "$(CYAN)🧹 ERPプロジェクトのみ完全クリーンアップ開始...$(RESET)"
+	@echo "$(YELLOW)⚠️  注意: ERPプロジェクト関連のみ削除されます$(RESET)"
+	@$(MAKE) docker-down-safe
+	@$(MAKE) docker-volumes-clean-safe
+	@echo "$(GREEN)✅ ERPプロジェクト完全クリーンアップ完了$(RESET)"
 
 .PHONY: docker-down-force
 docker-down-force: ## 🛑 Docker Compose強制停止（コンテナ削除）

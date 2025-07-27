@@ -89,12 +89,12 @@ func setDefaults() {
 	viper.SetDefault("server.port", "8080")
 	viper.SetDefault("server.mode", "debug")
 
-	// Database defaults
+	// Database defaults - Dockerコンテナに合わせた設定
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.name", "erp_access_control")
-	viper.SetDefault("database.user", "postgres")
-	viper.SetDefault("database.password", "password")
+	viper.SetDefault("database.user", "erp_user")
+	viper.SetDefault("database.password", "erp_password_2024")
 	viper.SetDefault("database.ssl_mode", "disable")
 
 	// JWT defaults

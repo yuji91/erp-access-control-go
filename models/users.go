@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -78,6 +79,25 @@ func (u *User) BeforeUpdate(tx *gorm.DB) error {
 // IsValidEmail メールアドレスの妥当性チェック
 func (u *User) IsValidEmail() bool {
 	_, err := mail.ParseAddress(u.Email)
+	return err == nil
+}
+
+// HashPassword パスワードをハッシュ化
+func (u *User) HashPassword(password string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	u.PasswordHash = string(hash)
+	return nil
+}
+
+// CheckPassword パスワードを検証
+func (u *User) CheckPassword(password string) bool {
+	if u.PasswordHash == "" {
+		return false
+	}
+	err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password))
 	return err == nil
 }
 

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
+	"erp-access-control-go/internal/middleware"
 	"erp-access-control-go/internal/services"
 	"erp-access-control-go/pkg/errors"
 )
@@ -229,15 +229,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // @Router /api/v1/auth/profile [get]
 func (h *AuthHandler) GetProfile(c *gin.Context) {
 	// コンテキストからユーザーIDを取得
-	userIDStr, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("認証情報が見つかりません"))
-		return
-	}
-
-	userID, err := uuid.Parse(userIDStr.(string))
+	userID, err := middleware.GetCurrentUserID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError("無効なユーザーIDです"))
+		c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("認証情報が見つかりません"))
 		return
 	}
 
@@ -277,15 +271,9 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	// コンテキストからユーザーIDを取得
-	userIDStr, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("認証情報が見つかりません"))
-		return
-	}
-
-	userID, err := uuid.Parse(userIDStr.(string))
+	userID, err := middleware.GetCurrentUserID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError("無効なユーザーIDです"))
+		c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("認証情報が見つかりません"))
 		return
 	}
 

@@ -102,20 +102,20 @@ ON CONFLICT (role_id, permission_id) DO NOTHING;
 -- テストユーザーデータ（パスワード: password123）
 INSERT INTO users (id, name, email, password_hash, department_id, primary_role_id, status, created_at, updated_at) VALUES
 -- システム管理者
-('880e8400-e29b-41d4-a716-446655440001', 'システム管理者', 'admin@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440001', 'active', NOW(), NOW()),
+('880e8400-e29b-41d4-a716-446655440001', 'システム管理者', 'admin@example.com', '$2a$10$Lx3PoA7WFGVbH8zqIEY/ZOGveQCGelGRncb9OfGoFbKfgvYM65xWi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440001', 'active', NOW(), NOW()),
 -- 部門管理者
-('880e8400-e29b-41d4-a716-446655440002', 'IT部門長', 'it-manager@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440002', 'active', NOW(), NOW()),
-('880e8400-e29b-41d4-a716-446655440003', '人事部長', 'hr-manager@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '550e8400-e29b-41d4-a716-446655440002', '660e8400-e29b-41d4-a716-446655440002', 'active', NOW(), NOW()),
+('880e8400-e29b-41d4-a716-446655440002', 'IT部門長', 'it-manager@example.com', '$2a$10$Lx3PoA7WFGVbH8zqIEY/ZOGveQCGelGRncb9OfGoFbKfgvYM65xWi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440002', 'active', NOW(), NOW()),
+('880e8400-e29b-41d4-a716-446655440003', '人事部長', 'hr-manager@example.com', '$2a$10$Lx3PoA7WFGVbH8zqIEY/ZOGveQCGelGRncb9OfGoFbKfgvYM65xWi', '550e8400-e29b-41d4-a716-446655440002', '660e8400-e29b-41d4-a716-446655440002', 'active', NOW(), NOW()),
 -- 開発者
-('880e8400-e29b-41d4-a716-446655440004', '開発者A', 'developer-a@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440005', 'active', NOW(), NOW()),
-('880e8400-e29b-41d4-a716-446655440005', '開発者B', 'developer-b@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440005', 'active', NOW(), NOW()),
+('880e8400-e29b-41d4-a716-446655440004', '開発者A', 'developer-a@example.com', '$2a$10$Lx3PoA7WFGVbH8zqIEY/ZOGveQCGelGRncb9OfGoFbKfgvYM65xWi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440005', 'active', NOW(), NOW()),
+('880e8400-e29b-41d4-a716-446655440005', '開発者B', 'developer-b@example.com', '$2a$10$Lx3PoA7WFGVbH8zqIEY/ZOGveQCGelGRncb9OfGoFbKfgvYM65xWi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440005', 'active', NOW(), NOW()),
 -- プロジェクトマネージャー
-('880e8400-e29b-41d4-a716-446655440006', 'PM田中', 'pm-tanaka@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440007', 'active', NOW(), NOW()),
+('880e8400-e29b-41d4-a716-446655440006', 'PM田中', 'pm-tanaka@example.com', '$2a$10$Lx3PoA7WFGVbH8zqIEY/ZOGveQCGelGRncb9OfGoFbKfgvYM65xWi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440007', 'active', NOW(), NOW()),
 -- 一般ユーザー
-('880e8400-e29b-41d4-a716-446655440007', '一般ユーザーA', 'user-a@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '550e8400-e29b-41d4-a716-446655440003', '660e8400-e29b-41d4-a716-446655440003', 'active', NOW(), NOW()),
-('880e8400-e29b-41d4-a716-446655440008', '一般ユーザーB', 'user-b@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '550e8400-e29b-41d4-a716-446655440004', '660e8400-e29b-41d4-a716-446655440003', 'active', NOW(), NOW()),
+('880e8400-e29b-41d4-a716-446655440007', '一般ユーザーA', 'user-a@example.com', '$2a$10$Lx3PoA7WFGVbH8zqIEY/ZOGveQCGelGRncb9OfGoFbKfgvYM65xWi', '550e8400-e29b-41d4-a716-446655440003', '660e8400-e29b-41d4-a716-446655440003', 'active', NOW(), NOW()),
+('880e8400-e29b-41d4-a716-446655440008', '一般ユーザーB', 'user-b@example.com', '$2a$10$Lx3PoA7WFGVbH8zqIEY/ZOGveQCGelGRncb9OfGoFbKfgvYM65xWi', '550e8400-e29b-41d4-a716-446655440004', '660e8400-e29b-41d4-a716-446655440003', 'active', NOW(), NOW()),
 -- ゲストユーザー
-('880e8400-e29b-41d4-a716-446655440009', 'ゲストユーザー', 'guest@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440004', 'active', NOW(), NOW())
+('880e8400-e29b-41d4-a716-446655440009', 'ゲストユーザー', 'guest@example.com', '$2a$10$Lx3PoA7WFGVbH8zqIEY/ZOGveQCGelGRncb9OfGoFbKfgvYM65xWi', '550e8400-e29b-41d4-a716-446655440001', '660e8400-e29b-41d4-a716-446655440004', 'active', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- 複数ロール割り当てテストデータ
