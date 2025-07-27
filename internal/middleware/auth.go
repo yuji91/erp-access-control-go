@@ -313,8 +313,21 @@ func GetCurrentUserPermissions(c *gin.Context) ([]string, error) {
 // hasPermission ユーザーの権限リストに指定された権限が存在するかチェック
 func hasPermission(userPermissions []string, requiredPermission string) bool {
 	for _, perm := range userPermissions {
-		if perm == requiredPermission || perm == "*" || perm == "*:*" {
+		// 完全一致をチェック
+		if perm == requiredPermission {
 			return true
+		}
+		// ワイルドカード権限をチェック
+		if perm == "*" || perm == "*:*" {
+			return true
+		}
+		// モジュール別ワイルドカード（例: "user:*"）をチェック
+		if strings.Contains(requiredPermission, ":") && strings.HasSuffix(perm, ":*") {
+			requiredModule := strings.Split(requiredPermission, ":")[0]
+			permModule := strings.TrimSuffix(perm, ":*")
+			if requiredModule == permModule {
+				return true
+			}
 		}
 	}
 	return false
