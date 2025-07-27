@@ -6,17 +6,17 @@ Role管理APIの実装（Step 3）を開始します。RoleServiceとRoleHandler
 
 ## ⬜️ **実装予定項目**
 
-### **3.1 RoleService実装** ⬜️ **未着手**
+### **3.1 RoleService実装** ✅ **完了**
 - **ファイル**: `internal/services/role.go`
-- **実装予定機能**:
-  - ⬜️ `CreateRole()` - ロール作成（階層構造・権限設定対応）
-  - ⬜️ `GetRole()` - ロール詳細取得（権限・階層込み）
-  - ⬜️ `UpdateRole()` - ロール更新（名前・親ロール変更）
-  - ⬜️ `DeleteRole()` - ロール削除（ユーザー割り当てチェック）
-  - ⬜️ `GetRoles()` - ロール一覧取得（階層表示）
-  - ⬜️ `AssignPermissions()` - ロールへの権限割り当て
-  - ⬜️ `GetRolePermissions()` - ロール権限一覧取得
-  - ⬜️ `GetRoleHierarchy()` - ロール階層ツリー取得
+- **実装済み機能**:
+  - ✅ `CreateRole()` - ロール作成（階層構造・権限設定対応）
+  - ✅ `GetRole()` - ロール詳細取得（権限・階層込み）
+  - ✅ `UpdateRole()` - ロール更新（名前・親ロール変更）
+  - ✅ `DeleteRole()` - ロール削除（ユーザー割り当てチェック）
+  - ✅ `GetRoles()` - ロール一覧取得（階層表示）
+  - ✅ `AssignPermissions()` - ロールへの権限割り当て
+  - ✅ `GetRolePermissions()` - ロール権限一覧取得
+  - ✅ `GetRoleHierarchy()` - ロール階層ツリー取得
 
 ### **3.2 RoleHandler実装** ⬜️ **未着手**
 - **ファイル**: `internal/handlers/role.go`
