@@ -39,16 +39,13 @@ type UpdateDepartmentRequest struct {
 
 // DepartmentResponse 部署レスポンス
 type DepartmentResponse struct {
-	ID          uuid.UUID             `json:"id"`
-	Name        string                `json:"name"`
-	Code        string                `json:"code"`
-	Description string                `json:"description"`
-	ParentID    *uuid.UUID            `json:"parent_id,omitempty"`
-	CreatedAt   string                `json:"created_at"`
-	UpdatedAt   string                `json:"updated_at"`
-	Parent      *DepartmentBasicInfo  `json:"parent,omitempty"`
-	Children    []DepartmentBasicInfo `json:"children,omitempty"`
-	Users       []UserBasicInfo       `json:"users,omitempty"`
+	ID        uuid.UUID             `json:"id"`
+	Name      string                `json:"name"`
+	ParentID  *uuid.UUID            `json:"parent_id,omitempty"`
+	CreatedAt string                `json:"created_at"`
+	Parent    *DepartmentBasicInfo  `json:"parent,omitempty"`
+	Children  []DepartmentBasicInfo `json:"children,omitempty"`
+	Users     []UserBasicInfo       `json:"users,omitempty"`
 }
 
 // DepartmentBasicInfo 部署基本情報
