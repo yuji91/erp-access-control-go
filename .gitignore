@@ -216,4 +216,8 @@ coverage/
 # pkg/ 
 
 # PR Description Template
-docs/pull_request_description.md server
+docs/pull_request_description.md
+
+# コンパイル済のGo実行ファイル
+# go build -o server ./cmd/server/ コマンドで生成される
+server
