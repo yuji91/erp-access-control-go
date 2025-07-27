@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -10,17 +9,20 @@ import (
 	"erp-access-control-go/internal/middleware"
 	"erp-access-control-go/internal/services"
 	"erp-access-control-go/pkg/errors"
+	"erp-access-control-go/pkg/logger"
 )
 
 // AuthHandler 認証ハンドラー
 type AuthHandler struct {
 	authService *services.AuthService
+	logger      *logger.Logger
 }
 
 // NewAuthHandler 認証ハンドラーを新規作成
-func NewAuthHandler(authService *services.AuthService) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, logger *logger.Logger) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
+		logger:      logger,
 	}
 }
 
@@ -32,14 +34,14 @@ type LoginRequest struct {
 
 // LoginResponse ログインレスポンス
 type LoginResponse struct {
-	AccessToken  string                 `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
-	TokenType    string                 `json:"token_type" example:"Bearer"`
-	ExpiresIn    int64                  `json:"expires_in" example:"900"`
-	User         *services.UserInfo     `json:"user"`
-	Permissions  []string               `json:"permissions" example:"['user:read','user:write']"`
-	ActiveRoles  []services.RoleInfo    `json:"active_roles"`
-	PrimaryRole  *services.RoleInfo     `json:"primary_role"`
-	HighestRole  *services.RoleInfo     `json:"highest_role"`
+	AccessToken string              `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+	TokenType   string              `json:"token_type" example:"Bearer"`
+	ExpiresIn   int64               `json:"expires_in" example:"900"`
+	User        *services.UserInfo  `json:"user"`
+	Permissions []string            `json:"permissions" example:"['user:read','user:write']"`
+	ActiveRoles []services.RoleInfo `json:"active_roles"`
+	PrimaryRole *services.RoleInfo  `json:"primary_role"`
+	HighestRole *services.RoleInfo  `json:"highest_role"`
 }
 
 // RefreshRequest リフレッシュリクエスト
@@ -59,58 +61,60 @@ type LogoutRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
 }
 
-// Login godoc
-// @Summary ユーザーログイン
-// @Description メールアドレスとパスワードでログインし、JWTトークンを取得
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body LoginRequest true "ログイン情報"
-// @Success 200 {object} LoginResponse
-// @Failure 400 {object} errors.APIError
-// @Failure 401 {object} errors.APIError
-// @Failure 500 {object} errors.APIError
-// @Router /api/v1/auth/login [post]
+// Login ユーザーログイン処理
 func (h *AuthHandler) Login(c *gin.Context) {
-	fmt.Printf("DEBUG: Login handler called\n")
-	
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		fmt.Printf("DEBUG: JSON binding error: %v\n", err)
-		c.JSON(http.StatusBadRequest, errors.NewValidationError("リクエストの形式が正しくありません", err.Error()))
+		h.logger.Warn("Invalid login request format", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+		c.Error(errors.NewValidationError("request", "Invalid request format"))
 		return
 	}
-	
-	fmt.Printf("DEBUG: Login request received for email: %s\n", req.Email)
+
+	h.logger.Info("Login attempt", map[string]interface{}{
+		"email": req.Email,
+		"ip":    c.ClientIP(),
+	})
 
 	// ログイン処理
 	userInfo, accessToken, err := h.authService.LoginWithCredentials(req.Email, req.Password)
 	if err != nil {
-		fmt.Printf("DEBUG: Login error occurred: %v\n", err)
-		fmt.Printf("DEBUG: Error type: %T\n", err)
-		
+		h.logger.Warn("Login failed", map[string]interface{}{
+			"email": req.Email,
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+
 		switch err {
 		case errors.ErrInvalidCredentials:
-			c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("メールアドレスまたはパスワードが正しくありません"))
+			c.Error(errors.NewAuthenticationError("Invalid email or password"))
 		case errors.ErrUserNotFound:
-			c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("ユーザーが見つかりません"))
+			c.Error(errors.NewAuthenticationError("User not found"))
 		case errors.ErrUserInactive:
-			c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("ユーザーアカウントが無効です"))
+			c.Error(errors.NewAuthenticationError("User account is inactive"))
 		default:
-			fmt.Printf("DEBUG: Unhandled error in login: %v\n", err)
-			c.JSON(http.StatusInternalServerError, errors.NewInternalServerError("ログイン処理中にエラーが発生しました"))
+			c.Error(errors.NewInternalError("Failed to process login"))
 		}
 		return
 	}
-	
-	fmt.Printf("DEBUG: Login successful for user: %s\n", userInfo.Email)
 
 	// 権限情報を取得
 	permissions, err := h.authService.GetUserPermissions(userInfo.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewInternalServerError("権限情報の取得に失敗しました"))
+		h.logger.Error("Failed to get user permissions", err, map[string]interface{}{
+			"user_id": userInfo.ID,
+		})
+		c.Error(errors.NewInternalError("Failed to get user permissions"))
 		return
 	}
+
+	h.logger.Info("Login successful", map[string]interface{}{
+		"user_id": userInfo.ID,
+		"email":   userInfo.Email,
+		"ip":      c.ClientIP(),
+	})
 
 	// レスポンス作成
 	response := &LoginResponse{
@@ -127,40 +131,46 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// RefreshToken godoc
-// @Summary トークンリフレッシュ
-// @Description リフレッシュトークンを使用して新しいアクセストークンを取得
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body RefreshRequest true "リフレッシュトークン"
-// @Success 200 {object} RefreshResponse
-// @Failure 400 {object} errors.APIError
-// @Failure 401 {object} errors.APIError
-// @Failure 500 {object} errors.APIError
-// @Router /api/v1/auth/refresh [post]
+// RefreshToken トークンリフレッシュ処理
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	var req RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError("リクエストの形式が正しくありません", err.Error()))
+		h.logger.Warn("Invalid refresh token request format", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+		c.Error(errors.NewValidationError("request", "Invalid request format"))
 		return
 	}
+
+	h.logger.Info("Token refresh attempt", map[string]interface{}{
+		"ip": c.ClientIP(),
+	})
 
 	// トークンリフレッシュ処理
 	loginResp, err := h.authService.RefreshToken(req.RefreshToken)
 	if err != nil {
+		h.logger.Warn("Token refresh failed", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+
 		switch err {
 		case errors.ErrInvalidToken:
-			c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("無効なトークンです"))
+			c.Error(errors.NewAuthenticationError("Invalid token"))
 		case errors.ErrTokenExpired:
-			c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("トークンの有効期限が切れています"))
+			c.Error(errors.NewAuthenticationError("Token has expired"))
 		case errors.ErrTokenRevoked:
-			c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("トークンが取り消されています"))
+			c.Error(errors.NewAuthenticationError("Token has been revoked"))
 		default:
-			c.JSON(http.StatusInternalServerError, errors.NewInternalServerError("トークンリフレッシュ中にエラーが発生しました"))
+			c.Error(errors.NewInternalError("Failed to refresh token"))
 		}
 		return
 	}
+
+	h.logger.Info("Token refresh successful", map[string]interface{}{
+		"ip": c.ClientIP(),
+	})
 
 	// レスポンス作成
 	response := &RefreshResponse{
@@ -172,77 +182,87 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// Logout godoc
-// @Summary ユーザーログアウト
-// @Description リフレッシュトークンを無効化してログアウト
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body LogoutRequest true "リフレッシュトークン"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} errors.APIError
-// @Failure 401 {object} errors.APIError
-// @Failure 500 {object} errors.APIError
-// @Router /api/v1/auth/logout [post]
+// Logout ログアウト処理
 func (h *AuthHandler) Logout(c *gin.Context) {
 	var req LogoutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError("リクエストの形式が正しくありません", err.Error()))
+		h.logger.Warn("Invalid logout request format", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+		c.Error(errors.NewValidationError("request", "Invalid request format"))
 		return
 	}
+
+	h.logger.Info("Logout attempt", map[string]interface{}{
+		"ip": c.ClientIP(),
+	})
 
 	// ログアウト処理（トークン無効化）
 	err := h.authService.LogoutWithToken(req.RefreshToken)
 	if err != nil {
+		h.logger.Warn("Logout failed", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+
 		switch err {
 		case errors.ErrInvalidToken:
-			c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("無効なトークンです"))
+			c.Error(errors.NewAuthenticationError("Invalid token"))
 		case errors.ErrTokenRevoked:
 			c.JSON(http.StatusOK, gin.H{
-				"message": "既にログアウト済みです",
-				"status":  "success",
+				"message":   "Already logged out",
+				"status":    "success",
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
 			})
 			return
 		default:
-			c.JSON(http.StatusInternalServerError, errors.NewInternalServerError("ログアウト処理中にエラーが発生しました"))
+			c.Error(errors.NewInternalError("Failed to process logout"))
 		}
 		return
 	}
 
+	h.logger.Info("Logout successful", map[string]interface{}{
+		"ip": c.ClientIP(),
+	})
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": "ログアウトが完了しました",
-		"status":  "success",
+		"message":   "Successfully logged out",
+		"status":    "success",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	})
 }
 
-// GetProfile godoc
-// @Summary ユーザープロフィール取得
-// @Description 現在のユーザー情報と権限を取得
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} services.UserInfo
-// @Failure 401 {object} errors.APIError
-// @Failure 500 {object} errors.APIError
-// @Router /api/v1/auth/profile [get]
+// GetProfile プロフィール取得処理
 func (h *AuthHandler) GetProfile(c *gin.Context) {
-	// コンテキストからユーザーIDを取得
 	userID, err := middleware.GetCurrentUserID(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("認証情報が見つかりません"))
+		h.logger.Warn("Failed to get current user ID", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+		c.Error(errors.NewAuthenticationError("Authentication required"))
 		return
 	}
+
+	h.logger.Info("Profile request", map[string]interface{}{
+		"user_id": userID,
+		"ip":      c.ClientIP(),
+	})
 
 	// ユーザー情報を取得
 	userInfo, err := h.authService.GetUserInfo(userID)
 	if err != nil {
+		h.logger.Error("Failed to get user info", err, map[string]interface{}{
+			"user_id": userID,
+			"ip":      c.ClientIP(),
+		})
+
 		switch err {
 		case errors.ErrUserNotFound:
-			c.JSON(http.StatusNotFound, errors.NewNotFoundError("ユーザーが見つかりません"))
+			c.Error(errors.NewNotFoundError("User", "User not found"))
 		default:
-			c.JSON(http.StatusInternalServerError, errors.NewInternalServerError("ユーザー情報の取得に失敗しました"))
+			c.Error(errors.NewInternalError("Failed to get user information"))
 		}
 		return
 	}
@@ -250,56 +270,67 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfo)
 }
 
-// ChangePassword godoc
-// @Summary パスワード変更
-// @Description 現在のパスワードを確認して新しいパスワードに変更
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body ChangePasswordRequest true "パスワード変更情報"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} errors.APIError
-// @Failure 401 {object} errors.APIError
-// @Failure 500 {object} errors.APIError
-// @Router /api/v1/auth/change-password [post]
-func (h *AuthHandler) ChangePassword(c *gin.Context) {
-	var req ChangePasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewValidationError("リクエストの形式が正しくありません", err.Error()))
-		return
-	}
-
-	// コンテキストからユーザーIDを取得
-	userID, err := middleware.GetCurrentUserID(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("認証情報が見つかりません"))
-		return
-	}
-
-	// パスワード変更処理
-	err = h.authService.ChangePassword(userID, req.CurrentPassword, req.NewPassword)
-	if err != nil {
-		switch err {
-		case errors.ErrInvalidCredentials:
-			c.JSON(http.StatusUnauthorized, errors.NewUnauthorizedError("現在のパスワードが正しくありません"))
-		case errors.ErrUserNotFound:
-			c.JSON(http.StatusNotFound, errors.NewNotFoundError("ユーザーが見つかりません"))
-		default:
-			c.JSON(http.StatusInternalServerError, errors.NewInternalServerError("パスワード変更中にエラーが発生しました"))
-		}
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "パスワードが正常に変更されました",
-		"status":  "success",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	})
-}
-
 // ChangePasswordRequest パスワード変更リクエスト
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password" binding:"required" example:"oldpassword123"`
 	NewPassword     string `json:"new_password" binding:"required,min=6" example:"newpassword123"`
-} 
+}
+
+// ChangePassword パスワード変更処理
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warn("Invalid password change request format", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+		c.Error(errors.NewValidationError("request", "Invalid request format"))
+		return
+	}
+
+	userID, err := middleware.GetCurrentUserID(c)
+	if err != nil {
+		h.logger.Warn("Failed to get current user ID", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+		c.Error(errors.NewAuthenticationError("Authentication required"))
+		return
+	}
+
+	h.logger.Info("Password change attempt", map[string]interface{}{
+		"user_id": userID,
+		"ip":      c.ClientIP(),
+	})
+
+	// パスワード変更処理
+	err = h.authService.ChangePassword(userID, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		h.logger.Warn("Password change failed", map[string]interface{}{
+			"user_id": userID,
+			"error":   err.Error(),
+			"ip":      c.ClientIP(),
+		})
+
+		switch err {
+		case errors.ErrInvalidCredentials:
+			c.Error(errors.NewAuthenticationError("Current password is incorrect"))
+		case errors.ErrUserNotFound:
+			c.Error(errors.NewNotFoundError("User", "User not found"))
+		default:
+			c.Error(errors.NewInternalError("Failed to change password"))
+		}
+		return
+	}
+
+	h.logger.Info("Password change successful", map[string]interface{}{
+		"user_id": userID,
+		"ip":      c.ClientIP(),
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "Password successfully changed",
+		"status":    "success",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
+}

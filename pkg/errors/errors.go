@@ -5,178 +5,238 @@ import (
 	"net/http"
 )
 
+// ErrorDetails エラーの詳細情報を表現
+type ErrorDetails struct {
+	Field  string `json:"field,omitempty"`  // エラーが発生したフィールド
+	Reason string `json:"reason,omitempty"` // エラーの具体的な理由
+}
+
 // APIError 構造化されたAPIエラーを表現
 type APIError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Details string `json:"details,omitempty"`
-	Status  int    `json:"-"`
+	Code    string       `json:"code"`              // エラーコード
+	Message string       `json:"message"`           // 人間が読みやすいメッセージ
+	Details ErrorDetails `json:"details,omitempty"` // エラーの詳細情報
+	Status  int          `json:"-"`                 // HTTPステータスコード
 }
 
 func (e *APIError) Error() string {
+	if e.Details.Field != "" {
+		return fmt.Sprintf("%s: %s (Field: %s, Reason: %s)", e.Code, e.Message, e.Details.Field, e.Details.Reason)
+	}
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-// 共通エラーコード
+// エラー種別の定義
 const (
-	ErrCodeValidation       = "VALIDATION_ERROR"
-	ErrCodeAuthentication   = "AUTHENTICATION_ERROR"
-	ErrCodeAuthorization    = "AUTHORIZATION_ERROR"
-	ErrCodeNotFound         = "NOT_FOUND"
-	ErrCodeDatabase         = "DATABASE_ERROR"
-	ErrCodeInternal         = "INTERNAL_ERROR"
-	ErrCodeInvalidToken     = "INVALID_TOKEN"
-	ErrCodeExpiredToken     = "EXPIRED_TOKEN"
-	ErrCodePermissionDenied = "PERMISSION_DENIED"
+	// 認証関連エラー
+	ErrCodeAuthentication = "AUTHENTICATION_ERROR" // 認証エラー
+	ErrCodeInvalidToken   = "INVALID_TOKEN"        // 無効なトークン
+	ErrCodeExpiredToken   = "EXPIRED_TOKEN"        // 期限切れトークン
+	ErrCodeRevokedToken   = "REVOKED_TOKEN"        // 無効化されたトークン
+
+	// 認可関連エラー
+	ErrCodeAuthorization     = "AUTHORIZATION_ERROR" // 認可エラー
+	ErrCodePermissionDenied  = "PERMISSION_DENIED"   // 権限不足
+	ErrCodeInsufficientScope = "INSUFFICIENT_SCOPE"  // スコープ不足
+
+	// バリデーション関連エラー
+	ErrCodeValidation   = "VALIDATION_ERROR" // バリデーションエラー
+	ErrCodeInvalidInput = "INVALID_INPUT"    // 不正な入力
+	ErrCodeMissingField = "MISSING_FIELD"    // 必須フィールド欠落
+
+	// ビジネスロジック関連エラー
+	ErrCodeNotFound     = "NOT_FOUND"           // リソース未発見
+	ErrCodeConflict     = "CONFLICT"            // リソース競合
+	ErrCodeBusinessRule = "BUSINESS_RULE_ERROR" // ビジネスルール違反
+
+	// システム関連エラー
+	ErrCodeDatabase        = "DATABASE_ERROR"         // データベースエラー
+	ErrCodeInternal        = "INTERNAL_ERROR"         // 内部サーバーエラー
+	ErrCodeExternalService = "EXTERNAL_SERVICE_ERROR" // 外部サービスエラー
 )
 
 // 定義済みエラー
 var (
-	ErrExpiredToken = &APIError{
-		Code:    ErrCodeExpiredToken,
-		Message: "Token has expired",
-		Status:  http.StatusUnauthorized,
-	}
-
-	ErrPermissionDenied = &APIError{
-		Code:    ErrCodePermissionDenied,
-		Message: "Insufficient permissions",
-		Status:  http.StatusForbidden,
-	}
-
-	ErrUserNotFound = &APIError{
-		Code:    ErrCodeNotFound,
-		Message: "User not found",
-		Status:  http.StatusNotFound,
-	}
-
-	ErrUnauthorized = &APIError{
-		Code:    ErrCodeAuthentication,
-		Message: "Unauthorized access",
-		Status:  http.StatusUnauthorized,
-	}
-
+	// 認証関連
 	ErrInvalidCredentials = &APIError{
 		Code:    ErrCodeAuthentication,
 		Message: "Invalid credentials",
-		Status:  http.StatusUnauthorized,
+		Details: ErrorDetails{
+			Reason: "The provided credentials are incorrect",
+		},
+		Status: http.StatusUnauthorized,
 	}
 
 	ErrInvalidToken = &APIError{
-		Code:    ErrCodeAuthentication,
+		Code:    ErrCodeInvalidToken,
 		Message: "Invalid token",
-		Status:  http.StatusUnauthorized,
+		Details: ErrorDetails{
+			Reason: "The provided token is invalid or malformed",
+		},
+		Status: http.StatusUnauthorized,
 	}
 
 	ErrTokenExpired = &APIError{
-		Code:    ErrCodeAuthentication,
+		Code:    ErrCodeExpiredToken,
 		Message: "Token expired",
-		Status:  http.StatusUnauthorized,
+		Details: ErrorDetails{
+			Reason: "The provided token has expired",
+		},
+		Status: http.StatusUnauthorized,
 	}
 
 	ErrTokenRevoked = &APIError{
-		Code:    ErrCodeAuthentication,
+		Code:    ErrCodeRevokedToken,
 		Message: "Token revoked",
-		Status:  http.StatusUnauthorized,
+		Details: ErrorDetails{
+			Reason: "The token has been revoked",
+		},
+		Status: http.StatusUnauthorized,
+	}
+
+	// 認可関連
+	ErrPermissionDenied = &APIError{
+		Code:    ErrCodePermissionDenied,
+		Message: "Insufficient permissions",
+		Details: ErrorDetails{
+			Reason: "You do not have the required permissions for this operation",
+		},
+		Status: http.StatusForbidden,
+	}
+
+	// リソース関連
+	ErrUserNotFound = &APIError{
+		Code:    ErrCodeNotFound,
+		Message: "User not found",
+		Details: ErrorDetails{
+			Reason: "The requested user does not exist",
+		},
+		Status: http.StatusNotFound,
 	}
 
 	ErrUserInactive = &APIError{
-		Code:    ErrCodeAuthentication,
+		Code:    ErrCodeBusinessRule,
 		Message: "User account is not active",
-		Status:  http.StatusUnauthorized,
+		Details: ErrorDetails{
+			Reason: "The user account must be activated before use",
+		},
+		Status: http.StatusForbidden,
 	}
 )
 
-// NewValidationError 新しいバリデーションエラーを作成（オーバーロード対応）
-func NewValidationError(args ...interface{}) *APIError {
-	apiErr := &APIError{
+// NewValidationError バリデーションエラーを作成
+func NewValidationError(field, reason string) *APIError {
+	return &APIError{
 		Code:    ErrCodeValidation,
 		Message: "Validation failed",
-		Status:  http.StatusBadRequest,
+		Details: ErrorDetails{
+			Field:  field,
+			Reason: reason,
+		},
+		Status: http.StatusBadRequest,
 	}
-	
-	switch len(args) {
-	case 1:
-		if err, ok := args[0].(error); ok {
-			apiErr.Details = err.Error()
-		} else if str, ok := args[0].(string); ok {
-			apiErr.Details = str
-		}
-	case 2:
-		field := fmt.Sprintf("%v", args[0])
-		message := fmt.Sprintf("%v", args[1])
-		apiErr.Details = fmt.Sprintf("Field '%s': %s", field, message)
-	}
-	
-	return apiErr
 }
 
-// NewAuthenticationError 新しい認証エラーを作成
-func NewAuthenticationError(message string) *APIError {
+// NewAuthenticationError 認証エラーを作成
+func NewAuthenticationError(reason string) *APIError {
 	return &APIError{
 		Code:    ErrCodeAuthentication,
 		Message: "Authentication failed",
-		Details: message,
-		Status:  http.StatusUnauthorized,
+		Details: ErrorDetails{
+			Reason: reason,
+		},
+		Status: http.StatusUnauthorized,
 	}
 }
 
-// NewAuthorizationError 新しい認可エラーを作成
-func NewAuthorizationError(message string) *APIError {
+// NewAuthorizationError 認可エラーを作成
+func NewAuthorizationError(reason string) *APIError {
 	return &APIError{
 		Code:    ErrCodeAuthorization,
 		Message: "Authorization failed",
-		Details: message,
-		Status:  http.StatusForbidden,
+		Details: ErrorDetails{
+			Reason: reason,
+		},
+		Status: http.StatusForbidden,
 	}
 }
 
-// NewDatabaseError 新しいデータベースエラーを作成
+// NewDatabaseError データベースエラーを作成
 func NewDatabaseError(err error) *APIError {
 	return &APIError{
 		Code:    ErrCodeDatabase,
 		Message: "Database operation failed",
-		Details: err.Error(),
-		Status:  http.StatusInternalServerError,
+		Details: ErrorDetails{
+			Reason: err.Error(),
+		},
+		Status: http.StatusInternalServerError,
 	}
 }
 
-// NewInternalError 新しい内部サーバーエラーを作成
-func NewInternalError(message string) *APIError {
+// NewBusinessError ビジネスロジックエラーを作成
+func NewBusinessError(code, message, reason string) *APIError {
+	return &APIError{
+		Code:    code,
+		Message: message,
+		Details: ErrorDetails{
+			Reason: reason,
+		},
+		Status: http.StatusUnprocessableEntity,
+	}
+}
+
+// NewInternalError 内部サーバーエラーを作成
+func NewInternalError(reason string) *APIError {
 	return &APIError{
 		Code:    ErrCodeInternal,
 		Message: "Internal server error",
-		Details: message,
-		Status:  http.StatusInternalServerError,
+		Details: ErrorDetails{
+			Reason: reason,
+		},
+		Status: http.StatusInternalServerError,
 	}
 }
 
-// NewNotFoundError 新しい404エラーを作成
-func NewNotFoundError(message string) *APIError {
+// NewNotFoundError リソース未発見エラーを作成
+func NewNotFoundError(resource, reason string) *APIError {
 	return &APIError{
 		Code:    ErrCodeNotFound,
-		Message: "Resource not found",
-		Details: message,
-		Status:  http.StatusNotFound,
+		Message: fmt.Sprintf("%s not found", resource),
+		Details: ErrorDetails{
+			Reason: reason,
+		},
+		Status: http.StatusNotFound,
 	}
 }
 
-// NewUnauthorizedError 新しい401エラーを作成
-func NewUnauthorizedError(message string) *APIError {
-	return &APIError{
-		Code:    ErrCodeAuthentication,
-		Message: "Unauthorized",
-		Details: message,
-		Status:  http.StatusUnauthorized,
+// IsNotFound エラーがNotFoundエラーかどうかを判定
+func IsNotFound(err error) bool {
+	if apiErr, ok := err.(*APIError); ok {
+		return apiErr.Code == ErrCodeNotFound
 	}
+	return false
 }
 
-// NewInternalServerError 新しい500エラーを作成
-func NewInternalServerError(message string) *APIError {
-	return &APIError{
-		Code:    ErrCodeInternal,
-		Message: "Internal server error",
-		Details: message,
-		Status:  http.StatusInternalServerError,
+// IsValidationError エラーがバリデーションエラーかどうかを判定
+func IsValidationError(err error) bool {
+	if apiErr, ok := err.(*APIError); ok {
+		return apiErr.Code == ErrCodeValidation
 	}
+	return false
+}
+
+// IsAuthenticationError エラーが認証エラーかどうかを判定
+func IsAuthenticationError(err error) bool {
+	if apiErr, ok := err.(*APIError); ok {
+		return apiErr.Code == ErrCodeAuthentication
+	}
+	return false
+}
+
+// IsAuthorizationError エラーが認可エラーかどうかを判定
+func IsAuthorizationError(err error) bool {
+	if apiErr, ok := err.(*APIError); ok {
+		return apiErr.Code == ErrCodeAuthorization
+	}
+	return false
 }
