@@ -55,11 +55,9 @@
 
 #### **🎊 デモ実行結果**
 - **最新デモ実行結果**: [docs/issues/todo/20250728_demo_output_09.md](docs/issues/todo/20250728_demo_output_09.md) **← エラー 0 件**
-- **📹 デモ動画**: 
-  - **🌐 Web UI デモ**: [localhost:8080 API一覧画面](./docs/demo/demo_local_host_8080.mov) **← NEW!**
-  - **💻 ターミナルデモ**: [フルシステムデモ動画 (126MB)](https://github.com/user/repo/releases/tag/v1.0.0-demo) **← 大容量のためReleasesページで提供**
+- **📹 デモ動画**: [localhost:8080 Web UI デモ](./docs/demo/demo_local_host_8080.mov) **← NEW!**
 
-> **💡 推奨**: まず **Web UI デモ** でシステムの全体像を把握し、詳細な動作確認は **ターミナルデモ** をご覧ください
+> **💡 デモ内容**: 美しいAPI一覧画面の実演 - カテゴリ別エンドポイント表示、HTTPメソッド別カラーリング、レスポンシブデザイン
 
 **🏆 達成結果**: 
   - **成功率**: **100%** (27/27件全成功、0エラー)
