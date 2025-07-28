@@ -364,14 +364,15 @@ func setupPermissionRoutes(group *gin.RouterGroup, permissionService *services.P
 
 	permissions := group.Group("/permissions")
 	{
-		permissions.POST("", middleware.RequirePermissions("permission:create"), permissionHandler.CreatePermission)                    // POST /api/v1/permissions
-		permissions.GET("", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissions)                         // GET /api/v1/permissions
-		permissions.GET("/matrix", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissionMatrix)             // GET /api/v1/permissions/matrix
-		permissions.GET("/modules/:module", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissionsByModule) // GET /api/v1/permissions/modules/:module
-		permissions.GET("/:id", middleware.RequirePermissions("permission:read"), permissionHandler.GetPermission)                      // GET /api/v1/permissions/:id
-		permissions.PUT("/:id", middleware.RequirePermissions("permission:update"), permissionHandler.UpdatePermission)                 // PUT /api/v1/permissions/:id
-		permissions.DELETE("/:id", middleware.RequirePermissions("permission:delete"), permissionHandler.DeletePermission)              // DELETE /api/v1/permissions/:id
-		permissions.GET("/:id/roles", middleware.RequirePermissions("permission:read"), permissionHandler.GetRolesByPermission)         // GET /api/v1/permissions/:id/roles
+		permissions.POST("", middleware.RequirePermissions("permission:create"), permissionHandler.CreatePermission)                                 // POST /api/v1/permissions
+		permissions.POST("/create-if-not-exists", middleware.RequirePermissions("permission:create"), permissionHandler.CreatePermissionIfNotExists) // POST /api/v1/permissions/create-if-not-exists
+		permissions.GET("", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissions)                                      // GET /api/v1/permissions
+		permissions.GET("/matrix", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissionMatrix)                          // GET /api/v1/permissions/matrix
+		permissions.GET("/modules/:module", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissionsByModule)              // GET /api/v1/permissions/modules/:module
+		permissions.GET("/:id", middleware.RequirePermissions("permission:read"), permissionHandler.GetPermission)                                   // GET /api/v1/permissions/:id
+		permissions.PUT("/:id", middleware.RequirePermissions("permission:update"), permissionHandler.UpdatePermission)                              // PUT /api/v1/permissions/:id
+		permissions.DELETE("/:id", middleware.RequirePermissions("permission:delete"), permissionHandler.DeletePermission)                           // DELETE /api/v1/permissions/:id
+		permissions.GET("/:id/roles", middleware.RequirePermissions("permission:read"), permissionHandler.GetRolesByPermission)                      // GET /api/v1/permissions/:id/roles
 	}
 }
 

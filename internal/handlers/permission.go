@@ -81,6 +81,67 @@ func (h *PermissionHandler) CreatePermission(c *gin.Context) {
 	})
 }
 
+// CreatePermissionIfNotExists 権限を作成（存在しない場合のみ）
+func (h *PermissionHandler) CreatePermissionIfNotExists(c *gin.Context) {
+	var req services.CreatePermissionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warn("Invalid create permission if not exists request format", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+		c.Error(errors.NewValidationError("request", "Invalid request format"))
+		return
+	}
+
+	// リクエストユーザーID取得（監査ログ用）
+	requestUserID, err := middleware.GetCurrentUserID(c)
+	if err != nil {
+		h.logger.Warn("Failed to get current user ID", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+		c.Error(errors.NewAuthenticationError("Authentication required"))
+		return
+	}
+
+	h.logger.Info("Creating permission if not exists", map[string]interface{}{
+		"module":        req.Module,
+		"action":        req.Action,
+		"requestUserID": requestUserID,
+		"ip":            c.ClientIP(),
+	})
+
+	permission, err := h.permissionService.CreatePermissionIfNotExists(req)
+	if err != nil {
+		h.logger.Error("Failed to create permission if not exists", err, map[string]interface{}{
+			"module":        req.Module,
+			"action":        req.Action,
+			"requestUserID": requestUserID,
+			"ip":            c.ClientIP(),
+		})
+		c.Error(err)
+		return
+	}
+
+	h.logger.Info("Permission create if not exists completed", map[string]interface{}{
+		"permissionID":  permission.ID,
+		"module":        permission.Module,
+		"action":        permission.Action,
+		"requestUserID": requestUserID,
+		"ip":            c.ClientIP(),
+	})
+
+	// 既存権限の場合は200、新規作成の場合は201を返す
+	statusCode := http.StatusOK // デフォルトは既存権限とみなす
+	
+	// 新規作成かどうかの判定は難しいので、統一して200 OKを返す
+	// ログで詳細な情報は確認できる
+	c.JSON(statusCode, gin.H{
+		"permission": permission,
+		"message":    "Permission is ready for use",
+	})
+}
+
 // GetPermissions 権限一覧を取得
 func (h *PermissionHandler) GetPermissions(c *gin.Context) {
 	var req services.GetPermissionsRequest
