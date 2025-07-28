@@ -54,7 +54,7 @@
 - **デモ実行**: `make demo` で全権限管理機能のライブデモ
 
 #### **🎊 デモ実行結果**
-- **最新デモ実行結果**: [docs/issues/todo/20250728_demo_output_09.md](docs/issues/todo/20250728_demo_output_09.md) **← エラー 0 件**
+- **最新デモ実行結果**: [docs/issues/done/20250728_make_demo_output.md](docs/issues/done/20250728_make_demo_output.md) **← エラー 0 件**
 #### **📹 デモ動画** **← NEW!**
 
 <video width="100%" max-width="800" controls>
