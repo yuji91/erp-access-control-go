@@ -173,6 +173,64 @@ func (s *PermissionService) CreatePermission(req CreatePermissionRequest) (*Perm
 	return &response, nil
 }
 
+// CreatePermissionIfNotExists 権限作成（存在しない場合のみ）
+func (s *PermissionService) CreatePermissionIfNotExists(req CreatePermissionRequest) (*PermissionResponse, error) {
+	// 入力値検証（基本形式・組み合わせ・依存関係）
+	if err := s.validateCreateRequest(req); err != nil {
+		return nil, err
+	}
+
+	// システム権限チェック
+	if s.isSystemPermission(req.Module, req.Action) {
+		return nil, errors.NewValidationError("system_permission", "Cannot create system permissions")
+	}
+
+	// 既存権限取得を試行
+	existing, err := s.findPermissionByModuleAction(req.Module, req.Action)
+	if err == nil {
+		// 既存権限が見つかった場合はそれを返す
+		response := s.convertToPermissionResponse(existing)
+		response.Description = req.Description
+		response.IsSystem = s.isSystemPermission(existing.Module, existing.Action)
+
+		s.logger.Info("Permission already exists, returning existing permission", map[string]interface{}{
+			"module":        existing.Module,
+			"action":        existing.Action,
+			"permission_id": existing.ID,
+		})
+
+		return &response, nil
+	}
+
+	// NotFoundエラー以外はエラーとして扱う
+	if !errors.IsNotFound(err) {
+		return nil, errors.NewDatabaseError(err)
+	}
+
+	// 新規作成（既存のCreatePermissionロジックを再利用）
+	s.logger.Info("Creating new permission", map[string]interface{}{
+		"module": req.Module,
+		"action": req.Action,
+	})
+
+	// 権限作成
+	permission := &models.Permission{
+		Module: req.Module,
+		Action: req.Action,
+	}
+
+	if err := s.db.Create(permission).Error; err != nil {
+		return nil, errors.NewDatabaseError(err)
+	}
+
+	// レスポンス作成
+	response := s.convertToPermissionResponse(permission)
+	response.Description = req.Description
+	response.IsSystem = false
+
+	return &response, nil
+}
+
 // GetPermission 権限詳細取得
 func (s *PermissionService) GetPermission(id uuid.UUID) (*PermissionResponse, error) {
 	var permission models.Permission

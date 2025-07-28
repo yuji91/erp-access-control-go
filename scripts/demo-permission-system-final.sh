@@ -50,6 +50,10 @@ log_success() {
     ((SUCCESS_COUNT++))
 }
 
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${RESET} $1"
+}
+
 log_demo() {
     echo -e "\n${CYAN}[DEMO]${RESET} $1"
 }
@@ -130,7 +134,76 @@ find_existing_permission() {
     echo "$perm_list" | jq -r ".permissions[]? | select(.module == \"$module\" and .action == \"$action\") | .id" 2>/dev/null
 }
 
-# レスポンス表示関数（改良版）
+# 権限作成（存在チェック付き）
+create_permission_if_not_exists() {
+    local module="$1"
+    local action="$2"
+    local description="$3"
+    
+    log_info "権限作成チェック: $module:$action"
+    
+    # 既存権限チェック（堅牢版）
+    local existing_id
+    existing_id=$(find_existing_permission "$module" "$action")
+    
+    if [ -n "$existing_id" ] && [ "$existing_id" != "null" ]; then
+        log_info "権限 $module:$action は既に存在します (ID: $existing_id)"
+        echo "$existing_id"
+        return 0
+    fi
+    
+    # 新規作成
+    log_info "新しい権限を作成します: $module:$action"
+    local response=$(safe_api_call "POST" "permissions" "{
+        \"module\": \"$module\",
+        \"action\": \"$action\",
+        \"description\": \"$description\"
+    }" "権限作成: $module:$action")
+    
+    # safe_api_callの戻り値チェック
+    if [ $? -eq 0 ]; then
+        local perm_id=$(echo "$response" | jq -r '.id // .data.id' 2>/dev/null)
+        if [ -n "$perm_id" ] && [ "$perm_id" != "null" ]; then
+            log_success "権限作成成功: $module:$action (ID: $perm_id)"
+            echo "$perm_id"
+            return 0
+        fi
+    fi
+    
+    log_error "権限作成に失敗: $module:$action"
+    return 1
+}
+
+# 改良された権限作成（存在チェック付き・新APIエンドポイント使用）
+create_permission_if_not_exists_api() {
+    local module="$1"
+    local action="$2" 
+    local description="$3"
+    
+    log_info "権限作成チェック（新API使用）: $module:$action"
+    
+    # 新しいAPIエンドポイントを使用
+    local response=$(safe_api_call "POST" "permissions/create-if-not-exists" "{
+        \"module\": \"$module\",
+        \"action\": \"$action\",
+        \"description\": \"$description\"
+    }" "権限作成: $module:$action")
+    
+    # safe_api_callの戻り値チェック
+    if [ $? -eq 0 ]; then
+        local perm_id=$(echo "$response" | jq -r '.permission.id' 2>/dev/null)
+        if [ -n "$perm_id" ] && [ "$perm_id" != "null" ]; then
+            log_success "権限設定完了: $module:$action (ID: $perm_id)"
+            echo "$perm_id"
+            return 0
+        fi
+    fi
+    
+    log_warning "権限設定でエラーが発生しましたが、処理を継続します: $module:$action"
+    return 1
+}
+
+# レスポンス表示関数（エラー判定改良版）
 show_response() {
     local title="$1"
     local response="$2"
@@ -138,7 +211,9 @@ show_response() {
     echo -e "\n${CYAN}━━━ $title ━━━${RESET}"
     if echo "$response" | jq '.' >/dev/null 2>&1; then
         echo "$response" | jq '.'
-        if echo "$response" | grep -q '"code":'; then
+        
+        # 改良されたエラー判定ロジック
+        if is_error_response "$response"; then
             log_error "APIエラーが発生しました: $title"
         else
             log_success "API呼び出し成功: $title"
@@ -150,7 +225,44 @@ show_response() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 
-# 安全なAPI呼び出し関数
+# エラーレスポンス判定関数（改良版）
+is_error_response() {
+    local response="$1"
+    
+    # 1. 成功レスポンスの特徴を確認（優先）
+    if echo "$response" | jq -e '.permissions' >/dev/null 2>&1 || \
+       echo "$response" | jq -e '.users' >/dev/null 2>&1 || \
+       echo "$response" | jq -e '.roles' >/dev/null 2>&1 || \
+       echo "$response" | jq -e '.departments' >/dev/null 2>&1 || \
+       echo "$response" | jq -e '.access_token' >/dev/null 2>&1; then
+        return 1  # 成功レスポンス
+    fi
+    
+    # 2. エラーコードでの判定
+    if echo "$response" | jq -e '.code' >/dev/null 2>&1; then
+        local code_value=$(echo "$response" | jq -r '.code')
+        case "$code_value" in
+            *ERROR*|*FAILED*|*INVALID*|*UNAUTHORIZED*|*FORBIDDEN*)
+                return 0  # エラー
+                ;;
+            SUCCESS|OK|CREATED|UPDATED)
+                return 1  # 成功
+                ;;
+        esac
+    fi
+    
+    # 3. エラーメッセージでの判定
+    if echo "$response" | jq -e '.message' >/dev/null 2>&1; then
+        local message=$(echo "$response" | jq -r '.message')
+        if [[ "$message" =~ [Ee]rror|[Ff]ailed|[Ii]nvalid ]]; then
+            return 0  # エラー
+        fi
+    fi
+    
+    return 1  # デフォルトは成功
+}
+
+# 安全なAPI呼び出し関数（HTTPステータス確認機能付き）
 safe_api_call() {
     local method="$1"
     local endpoint="$2"
@@ -158,24 +270,37 @@ safe_api_call() {
     local context="$4"
     
     local response
+    local http_code
+    
     if [ "$method" = "POST" ]; then
-        response=$(curl -s -X POST "$API_BASE/$endpoint" \
+        response=$(curl -s -w "HTTP_CODE:%{http_code}" -X POST "$API_BASE/$endpoint" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
             -d "$data")
     elif [ "$method" = "GET" ]; then
-        response=$(curl -s -X GET "$API_BASE/$endpoint" \
+        response=$(curl -s -w "HTTP_CODE:%{http_code}" -X GET "$API_BASE/$endpoint" \
             -H "Authorization: Bearer $ACCESS_TOKEN")
     fi
     
-    show_response "$context" "$response"
+    # HTTPステータスとボディを分離
+    http_code=$(echo "$response" | grep -o 'HTTP_CODE:[0-9]*' | cut -d: -f2)
+    response_body=$(echo "$response" | sed 's/HTTP_CODE:[0-9]*$//')
     
-    # エラーチェック
-    if echo "$response" | grep -q '"code":'; then
+    show_response "$context" "$response_body"
+    
+    # HTTPステータスベースのエラー判定（優先）
+    if [[ "$http_code" -ge 400 ]]; then
+        log_error "HTTP Error $http_code: $context"
         return 1
     fi
     
-    echo "$response"
+    # レスポンス構造ベースの補助判定（改良版）
+    if is_error_response "$response_body"; then
+        log_error "API Error: $context"
+        return 1
+    fi
+    
+    echo "$response_body"
     return 0
 }
 
@@ -395,29 +520,12 @@ demo_permission_management() {
     for perm_data in "${permissions[@]}"; do
         IFS=':' read -r module action description <<< "$perm_data"
         
-        # 既存権限チェック
-        local existing_perm_id
-        existing_perm_id=$(find_existing_permission "$module" "$action")
-        
-        if [ -z "$existing_perm_id" ]; then
-            log_info "新しい権限を作成します: $module:$action"
-            local perm_response=$(curl -s -X POST "$API_BASE/permissions" \
-                -H "Authorization: Bearer $ACCESS_TOKEN" \
-                -H "Content-Type: application/json" \
-                -d "{
-                    \"module\": \"$module\",
-                    \"action\": \"$action\",
-                    \"description\": \"$description\"
-                }")
-            
-            local perm_id
-            if perm_id=$(extract_id_safely "$perm_response" "${module}:${action}権限作成"); then
-                show_response "${module}:${action}権限作成" "$perm_response"
-            else
-                show_response "${module}:${action}権限作成（エラー）" "$perm_response"
-            fi
+        # 改良された権限作成（存在チェック付き）
+        local perm_id
+        if perm_id=$(create_permission_if_not_exists "$module" "$action" "$description"); then
+            log_success "権限設定完了: $module:$action (ID: $perm_id)"
         else
-            log_info "既存の権限を使用: $module:$action ($existing_perm_id)"
+            log_warning "権限設定でエラーが発生しましたが、処理を継続します: $module:$action"
         fi
     done
     
@@ -456,10 +564,11 @@ demo_user_management() {
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{
-                \"username\": \"demo_manager_${TIMESTAMP}\",
+                \"name\": \"demo_manager_${TIMESTAMP}\",
                 \"email\": \"demo_manager_${TIMESTAMP}@example.com\",
                 \"password\": \"password123\",
-                \"department_id\": \"$DEPT_SALES_ID\"
+                \"department_id\": \"$DEPT_SALES_ID\",
+                \"primary_role_id\": \"$MANAGER_ROLE_ID\"
             }")
         
         local user_id
@@ -486,11 +595,287 @@ demo_system_monitoring() {
     
     # 6.1 システムヘルスチェック
     log_step "6.1 システムヘルスチェック"
-    safe_api_call "GET" "../health" "" "ヘルスチェック"
+    local health_response=$(curl -s -X GET "http://localhost:8080/health")
+    show_response "ヘルスチェック" "$health_response"
     
     # 6.2 バージョン情報
     log_step "6.2 バージョン情報"  
-    safe_api_call "GET" "../version" "" "バージョン情報"
+    local version_response=$(curl -s -X GET "http://localhost:8080/version")
+    show_response "バージョン情報" "$version_response"
+}
+
+# =============================================================================
+# デモ実行前事前チェック機能
+# =============================================================================
+
+# システム環境チェック
+check_system_environment() {
+    log_demo "=== システム環境事前チェック ==="
+    
+    local check_count=0
+    local success_count=0
+    
+    # 1. APIサーバー接続確認
+    log_step "1. APIサーバー接続確認"
+    check_count=$((check_count + 1))
+    if curl -s "$API_BASE/health" >/dev/null 2>&1; then
+        log_success "APIサーバー接続: OK"
+        success_count=$((success_count + 1))
+    else
+        log_error "APIサーバー接続: 失敗"
+        return 1
+    fi
+    
+    # 2. 管理者認証確認
+    log_step "2. 管理者認証確認"
+    check_count=$((check_count + 1))
+    local test_login=$(curl -s -X POST "$API_BASE/auth/login" \
+        -H "Content-Type: application/json" \
+        -d '{"email": "admin@example.com", "password": "password123"}')
+    
+    local test_token=$(echo "$test_login" | jq -r '.data.access_token // .access_token' 2>/dev/null)
+    if [ -n "$test_token" ] && [ "$test_token" != "null" ]; then
+        log_success "管理者認証: OK"
+        success_count=$((success_count + 1))
+    else
+        log_error "管理者認証: 失敗"
+        return 1
+    fi
+    
+    # 3. 必須コマンド確認
+    log_step "3. 必須コマンド確認"
+    check_count=$((check_count + 1))
+    local missing_commands=()
+    
+    for cmd in curl jq; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing_commands+=("$cmd")
+        fi
+    done
+    
+    if [ ${#missing_commands[@]} -eq 0 ]; then
+        log_success "必須コマンド: OK (curl, jq)"
+        success_count=$((success_count + 1))
+    else
+        log_error "必須コマンド不足: ${missing_commands[*]}"
+        return 1
+    fi
+    
+    # 4. データベース接続確認（API経由）
+    log_step "4. データベース接続確認"
+    check_count=$((check_count + 1))
+    local db_test=$(curl -s -X GET "$API_BASE/departments" \
+        -H "Authorization: Bearer $test_token")
+    
+    if echo "$db_test" | jq -e '.departments' >/dev/null 2>&1; then
+        log_success "データベース接続: OK"
+        success_count=$((success_count + 1))
+    else
+        log_error "データベース接続: 問題あり"
+        log_info "レスポンス: $db_test"
+    fi
+    
+    # 結果サマリー
+    echo ""
+    log_info "システム環境チェック結果: $success_count/$check_count 項目成功"
+    
+    if [ $success_count -eq $check_count ]; then
+        log_success "✅ 全ての環境チェックに合格しました"
+        return 0
+    else
+        log_warning "⚠️  一部の環境チェックで問題が検出されました"
+        return 1
+    fi
+}
+
+# 権限データ整合性チェック
+check_permission_integrity() {
+    log_demo "=== 権限データ整合性チェック ==="
+    
+    # 必要な権限リストの定義
+    local required_permissions=(
+        "inventory:read:在庫データ閲覧権限"
+        "inventory:view:在庫表示権限"
+        "inventory:create:在庫作成権限"
+        "reports:create:レポート作成権限"
+        "orders:create:注文作成権限"
+        "user:read:ユーザー読み取り権限"
+        "user:list:ユーザー一覧権限"
+        "department:read:部署読み取り権限"
+        "department:list:部署一覧権限"
+        "role:read:ロール読み取り権限"
+        "role:list:ロール一覧権限"
+        "permission:read:権限読み取り権限"
+        "permission:list:権限一覧権限"
+    )
+    
+    local check_count=0
+    local success_count=0
+    local created_count=0
+    
+    log_step "必要権限の存在確認・作成"
+    
+    for perm_data in "${required_permissions[@]}"; do
+        IFS=':' read -r module action description <<< "$perm_data"
+        check_count=$((check_count + 1))
+        
+        # 既存権限チェック
+        local existing_id
+        existing_id=$(find_existing_permission "$module" "$action")
+        
+        if [ -n "$existing_id" ] && [ "$existing_id" != "null" ]; then
+            log_info "✓ $module:$action 既存 (ID: $existing_id)"
+            success_count=$((success_count + 1))
+        else
+            # 新しいAPIエンドポイントで作成試行
+            log_info "○ $module:$action 作成中..."
+            if create_permission_if_not_exists_api "$module" "$action" "$description" >/dev/null 2>&1; then
+                log_success "✓ $module:$action 作成成功"
+                success_count=$((success_count + 1))
+                created_count=$((created_count + 1))
+            else
+                log_warning "△ $module:$action 作成スキップ（バリデーションエラーの可能性）"
+            fi
+        fi
+    done
+    
+    # 結果サマリー
+    echo ""
+    log_info "権限整合性チェック結果:"
+    log_info "  確認対象: $check_count 権限"
+    log_info "  利用可能: $success_count 権限"
+    log_info "  新規作成: $created_count 権限"
+    
+    if [ $success_count -ge $((check_count * 7 / 10)) ]; then
+        log_success "✅ 十分な権限データが確保されています"
+        return 0
+    else
+        log_warning "⚠️  権限データに不足があります"
+        return 1
+    fi
+}
+
+# デモデータ前提条件チェック
+check_demo_prerequisites() {
+    log_demo "=== デモデータ前提条件チェック ==="
+    
+    local check_count=0
+    local success_count=0
+    
+    # 1. 基本部署データ確認
+    log_step "1. 基本部署データ確認"
+    check_count=$((check_count + 1))
+    local dept_response=$(safe_api_call "GET" "departments" "" "部署一覧取得")
+    local dept_count=$(echo "$dept_response" | jq -r '.total // 0' 2>/dev/null)
+    
+    # 空文字列チェック
+    if [ -z "$dept_count" ] || [ "$dept_count" = "null" ]; then
+        dept_count=0
+    fi
+    
+    if [ "$dept_count" -gt 0 ]; then
+        log_success "部署データ: $dept_count 件確認"
+        success_count=$((success_count + 1))
+    else
+        log_warning "部署データ: 不足（$dept_count 件）"
+    fi
+    
+    # 2. 基本ロールデータ確認
+    log_step "2. 基本ロールデータ確認"
+    check_count=$((check_count + 1))
+    local role_response=$(safe_api_call "GET" "roles" "" "ロール一覧取得")
+    local role_count=$(echo "$role_response" | jq -r '.total // 0' 2>/dev/null)
+    
+    # 空文字列チェック
+    if [ -z "$role_count" ] || [ "$role_count" = "null" ]; then
+        role_count=0
+    fi
+    
+    if [ "$role_count" -gt 0 ]; then
+        log_success "ロールデータ: $role_count 件確認"
+        success_count=$((success_count + 1))
+    else
+        log_warning "ロールデータ: 不足（$role_count 件）"
+    fi
+    
+    # 3. 基本ユーザーデータ確認
+    log_step "3. 基本ユーザーデータ確認"
+    check_count=$((check_count + 1))
+    local user_response=$(safe_api_call "GET" "users" "" "ユーザー一覧取得")
+    local user_count=$(echo "$user_response" | jq -r '.total // 0' 2>/dev/null)
+    
+    # 空文字列チェック
+    if [ -z "$user_count" ] || [ "$user_count" = "null" ]; then
+        user_count=0
+    fi
+    
+    if [ "$user_count" -gt 0 ]; then
+        log_success "ユーザーデータ: $user_count 件確認"
+        success_count=$((success_count + 1))
+    else
+        log_warning "ユーザーデータ: 不足（$user_count 件）"
+    fi
+    
+    # 結果サマリー
+    echo ""
+    log_info "デモデータ前提条件チェック結果: $success_count/$check_count 項目OK"
+    
+    if [ $success_count -eq $check_count ]; then
+        log_success "✅ 全ての前提条件が満たされています"
+        return 0
+    else
+        log_warning "⚠️  一部の前提条件に不足があります（デモは実行可能）"
+        return 0  # 警告だが実行は継続
+    fi
+}
+
+# 包括的事前チェック実行
+run_pre_demo_checks() {
+    echo -e "${CYAN}===============================================================================${RESET}"
+    echo -e "${CYAN}              ERP Access Control API デモ実行前チェック${RESET}"
+    echo -e "${CYAN}===============================================================================${RESET}"
+    echo ""
+    
+    local total_checks=3
+    local passed_checks=0
+    
+    # システム環境チェック
+    if check_system_environment; then
+        passed_checks=$((passed_checks + 1))
+    fi
+    echo ""
+    
+    # 権限データ整合性チェック（認証が必要）
+    authenticate >/dev/null 2>&1  # 事前認証
+    if check_permission_integrity; then
+        passed_checks=$((passed_checks + 1))
+    fi
+    echo ""
+    
+    # デモデータ前提条件チェック
+    if check_demo_prerequisites; then
+        passed_checks=$((passed_checks + 1))
+    fi
+    echo ""
+    
+    # 総合結果
+    echo -e "${CYAN}===============================================================================${RESET}"
+    echo -e "${CYAN}                    事前チェック結果サマリー${RESET}"
+    echo -e "${CYAN}===============================================================================${RESET}"
+    log_info "チェック項目: $passed_checks/$total_checks 合格"
+    
+    if [ $passed_checks -eq $total_checks ]; then
+        log_success "🎉 全ての事前チェックに合格しました！デモを安全に実行できます"
+        echo ""
+        log_info "デモ実行準備完了 - 'make demo' または 'scripts/demo-permission-system-final.sh' でデモを開始してください"
+        return 0
+    elif [ $passed_checks -ge 2 ]; then
+        log_warning "⚠️  軽微な問題がありますが、デモ実行は可能です"
+        return 0
+    else
+        log_error "❌ 重要な問題が検出されました。デモ実行前に問題を解決してください"
+        return 1
+    fi
 }
 
 # =============================================================================
@@ -511,6 +896,9 @@ main() {
         exit 1
     fi
     log_success "APIサーバーが正常に動作中"
+    
+    # デモ実行前事前チェック
+    run_pre_demo_checks
     
     # デモ実行
     authenticate

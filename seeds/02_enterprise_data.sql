@@ -1,36 +1,50 @@
--- エンタープライズ機能用テストデータ
--- 企業レベルのRBACシステム・スコープ管理・監査機能用のサンプルデータ
+-- =============================================================================
+-- ERP Access Control - Enterprise Data Seeds v2.0
+-- =============================================================================
+-- エンタープライズ機能のサンプルデータ投入
+-- 対象テーブル: user_scopes, approval_states, audit_logs, time_restrictions, revoked_tokens
 
 -- =============================================================================
--- User Scopes（ユーザースコープ）- 部門・地域・プロジェクト別アクセス制御
+-- User Scopes（ユーザースコープ）- 細粒度アクセス制御
 -- =============================================================================
 
--- 部門スコープ：IT部門管理者は自部門とその子部門のユーザーのみ管理可能
+-- ユーザー別のスコープ権限設定
 INSERT INTO user_scopes (user_id, resource_type, scope_type, scope_value, created_at) VALUES
--- IT部門長の部門スコープ
-('880e8400-e29b-41d4-a716-446655440002', 'user', 'department', 
- '{"department_ids": ["550e8400-e29b-41d4-a716-446655440001"], "include_children": true, "access_level": "manager"}', NOW()),
+-- システム管理者：全社アクセス
+('880e8400-e29b-41d4-a716-446655440001', 'system', 'department', 
+ '{"departments": ["*"], "access_level": "admin", "full_control": true}', NOW()),
 
--- 人事部長の部門スコープ  
-('880e8400-e29b-41d4-a716-446655440003', 'user', 'department',
- '{"department_ids": ["550e8400-e29b-41d4-a716-446655440002"], "include_children": true, "access_level": "manager"}', NOW()),
+-- IT部門長：IT部門関連の完全権限
+('880e8400-e29b-41d4-a716-446655440002', 'department', 'department',
+ '{"departments": ["550e8400-e29b-41d4-a716-446655440001"], "management_level": "department_head", "can_approve": true}', NOW()),
 
--- 開発者Aのプロジェクトスコープ
+-- 人事部長：人事部門 + ユーザー管理権限
+('880e8400-e29b-41d4-a716-446655440003', 'department', 'department',
+ '{"departments": ["550e8400-e29b-41d4-a716-446655440002"], "user_management": true, "hr_functions": true}', NOW()),
+
+-- 開発者A：開発プロジェクト範囲
 ('880e8400-e29b-41d4-a716-446655440004', 'project', 'project',
- '{"project_ids": ["proj-erp-001", "proj-api-002"], "access_level": "developer", "permissions": ["read", "write"]}', NOW()),
+ '{"projects": ["erp-dev", "api-development"], "access_level": "developer", "read_write": true}', NOW()),
 
--- 開発者Bの地域スコープ
-('880e8400-e29b-41d4-a716-446655440005', 'user', 'region',
- '{"regions": ["tokyo", "kanagawa"], "permissions": ["read", "write"], "time_restricted": true}', NOW()),
+-- 開発者B：異なるプロジェクト範囲
+('880e8400-e29b-41d4-a716-446655440005', 'project', 'project',
+ '{"projects": ["frontend-dev", "testing"], "access_level": "developer", "deploy_permission": false}', NOW()),
 
--- プロジェクトマネージャーの複合スコープ
-('880e8400-e29b-41d4-a716-446655440006', 'user', 'department',
- '{"department_ids": ["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440003"], "include_children": false, "access_level": "project_manager"}', NOW()),
+-- プロジェクトマネージャー：複数プロジェクト管理
+('880e8400-e29b-41d4-a716-446655440006', 'project', 'project',
+ '{"projects": ["*"], "access_level": "manager", "resource_management": true, "team_lead": true}', NOW()),
 
--- テスターの限定スコープ
-('880e8400-e29b-41d4-a716-446655440007', 'system', 'feature',
- '{"features": ["testing", "bug_tracking"], "access_level": "tester", "read_only": false}', NOW())
-ON CONFLICT (user_id, resource_type, scope_type) DO NOTHING;
+-- 一般ユーザーA：営業部門限定
+('880e8400-e29b-41d4-a716-446655440007', 'department', 'department',
+ '{"departments": ["550e8400-e29b-41d4-a716-446655440003"], "access_level": "user", "read_only": false}', NOW()),
+
+-- 一般ユーザーB：経理部門限定
+('880e8400-e29b-41d4-a716-446655440008', 'department', 'department',
+ '{"departments": ["550e8400-e29b-41d4-a716-446655440004"], "access_level": "user", "financial_data": true}', NOW()),
+
+-- ゲストユーザー：閲覧のみ
+('880e8400-e29b-41d4-a716-446655440009', 'department', 'department',
+ '{"departments": ["550e8400-e29b-41d4-a716-446655440001"], "access_level": "guest", "read_only": true}', NOW());
 
 -- =============================================================================
 -- Approval States（承認状態）- ワークフロー・承認フロー管理
@@ -60,93 +74,77 @@ INSERT INTO approval_states (state_name, approver_role_id, step_order, resource_
  '{"cross_department": false, "notification_required": true}', NOW()),
  
 ('人事部承認', '660e8400-e29b-41d4-a716-446655440003', 2, 'department_change',
- '{"cross_department": true, "hr_approval": true, "final_approval": true}', NOW())
-ON CONFLICT (state_name, resource_type, step_order) DO NOTHING;
+ '{"cross_department": true, "hr_approval": true, "final_approval": true}', NOW());
 
 -- =============================================================================
 -- Audit Logs（監査ログ）- セキュリティ・コンプライアンス用ログ
 -- =============================================================================
 
 -- サンプル監査ログ（開発・テスト用）
-INSERT INTO audit_logs (user_id, action, resource_type, resource_id, result, details, ip_address, user_agent, timestamp, created_at) VALUES
--- システム管理者のログイン・操作ログ
-('880e8400-e29b-41d4-a716-446655440001', 'LOGIN', 'auth', '880e8400-e29b-41d4-a716-446655440001', 'SUCCESS',
- '{"login_method": "password", "session_duration": "15min", "two_factor": false}', '192.168.1.100', 
- 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', NOW() - INTERVAL '2 hours', NOW()),
+INSERT INTO audit_logs (user_id, action, resource_type, resource_id, result, reason, reason_code, ip_address, user_agent, timestamp) VALUES
+-- ログイン成功ログ
+('880e8400-e29b-41d4-a716-446655440001', 'LOGIN', 'auth', 'session_12345', 'SUCCESS', 
+ 'Administrator login successful', 'AUTH_SUCCESS', '192.168.1.10', 'Mozilla/5.0', NOW() - INTERVAL '2 hours'),
 
-('880e8400-e29b-41d4-a716-446655440001', 'CREATE_USER', 'user', '880e8400-e29b-41d4-a716-446655440009', 'SUCCESS',
- '{"created_user": "新規開発者", "assigned_role": "開発者", "department": "IT部門"}', '192.168.1.100',
- 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', NOW() - INTERVAL '1 hour', NOW()),
+-- ユーザー作成ログ
+('880e8400-e29b-41d4-a716-446655440001', 'CREATE_USER', 'user', '880e8400-e29b-41d4-a716-446655440008', 'SUCCESS',
+ 'New user created in accounting department', 'USER_CREATED', '192.168.1.10', 'curl/7.68.0', NOW() - INTERVAL '1 hour'),
 
--- 部門管理者の操作ログ
-('880e8400-e29b-41d4-a716-446655440002', 'UPDATE_USER_ROLE', 'user_role', '880e8400-e29b-41d4-a716-446655440004', 'SUCCESS',
- '{"old_role": "一般ユーザー", "new_role": "開発者", "reason": "昇進に伴う権限変更"}', '192.168.1.101',
- 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', NOW() - INTERVAL '30 minutes', NOW()),
+-- 権限変更ログ
+('880e8400-e29b-41d4-a716-446655440002', 'MODIFY_PERMISSIONS', 'role', '660e8400-e29b-41d4-a716-446655440003', 'SUCCESS',
+ 'General user permissions updated', 'PERM_UPDATED', '192.168.1.20', 'Postman/8.0', NOW() - INTERVAL '4 hours'),
 
--- 開発者の失敗ログ
-('880e8400-e29b-41d4-a716-446655440004', 'DELETE_USER', 'user', '880e8400-e29b-41d4-a716-446655440008', 'FAILED',
- '{"error": "PERMISSION_DENIED", "required_permission": "user:delete", "user_permission": "user:read"}', '192.168.1.102',
- 'Mozilla/5.0 (Linux; Ubuntu)', NOW() - INTERVAL '15 minutes', NOW()),
-
--- セキュリティ関連ログ
-('880e8400-e29b-41d4-a716-446655440005', 'LOGIN_FAILED', 'auth', NULL, 'FAILED',
- '{"reason": "INVALID_PASSWORD", "attempt_count": 3, "ip_blocked": false}', '203.0.113.42',
- 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0)', NOW() - INTERVAL '5 minutes', NOW()),
+-- ログイン失敗ログ
+('880e8400-e29b-41d4-a716-446655440004', 'LOGIN', 'auth', 'failed_attempt_001', 'DENIED',
+ 'Invalid password provided', 'AUTH_FAILED', '192.168.1.50', 'Mozilla/5.0', NOW() - INTERVAL '30 minutes'),
 
 -- システム操作ログ
 ('880e8400-e29b-41d4-a716-446655440001', 'SYSTEM_BACKUP', 'system', 'backup_20250728', 'SUCCESS',
- '{"backup_type": "full", "size_mb": 2048, "duration_seconds": 120}', '192.168.1.100',
- 'curl/7.68.0', NOW() - INTERVAL '3 hours', NOW())
-ON CONFLICT (id) DO NOTHING;
+ 'Full system backup completed successfully', 'BACKUP_SUCCESS', '192.168.1.100',
+ 'curl/7.68.0', NOW() - INTERVAL '3 hours');
 
 -- =============================================================================
 -- Time Restrictions（時間制限）- 時間ベースアクセス制御
 -- =============================================================================
 
 -- 時間制限設定
-INSERT INTO time_restrictions (user_id, resource_type, start_time, end_time, allowed_days, timezone, restriction_type, created_at) VALUES
+INSERT INTO time_restrictions (user_id, resource_type, start_time, end_time, allowed_days, timezone, created_at) VALUES
 -- 開発者A：平日9-18時のみシステムアクセス可能
-('880e8400-e29b-41d4-a716-446655440004', 'system', '09:00:00', '18:00:00', '{1,2,3,4,5}', 'Asia/Tokyo', 'work_hours', NOW()),
+('880e8400-e29b-41d4-a716-446655440004', 'system', '09:00:00', '18:00:00', '{1,2,3,4,5}', 'Asia/Tokyo', NOW()),
 
 -- 開発者B：平日8-20時 + 土曜日のシステムアクセス
-('880e8400-e29b-41d4-a716-446655440005', 'system', '08:00:00', '20:00:00', '{1,2,3,4,5,6}', 'Asia/Tokyo', 'extended_hours', NOW()),
+('880e8400-e29b-41d4-a716-446655440005', 'system', '08:00:00', '20:00:00', '{1,2,3,4,5,6}', 'Asia/Tokyo', NOW()),
 
 -- プロジェクトマネージャー：制限なし（24/7アクセス）
-('880e8400-e29b-41d4-a716-446655440006', 'system', '00:00:00', '23:59:59', '{0,1,2,3,4,5,6}', 'Asia/Tokyo', 'unrestricted', NOW()),
-
--- テスター：特定機能への時間制限
-('880e8400-e29b-41d4-a716-446655440007', 'feature', '10:00:00', '16:00:00', '{1,2,3,4,5}', 'Asia/Tokyo', 'testing_hours', NOW()),
+('880e8400-e29b-41d4-a716-446655440006', 'system', '00:00:00', '23:59:59', '{1,2,3,4,5,6,7}', 'Asia/Tokyo', NOW()),
 
 -- ゲストユーザー：平日日中のみ閲覧可能
-('880e8400-e29b-41d4-a716-446655440008', 'read_only', '09:00:00', '17:00:00', '{1,2,3,4,5}', 'Asia/Tokyo', 'guest_hours', NOW())
-ON CONFLICT (user_id, resource_type) DO NOTHING;
+('880e8400-e29b-41d4-a716-446655440009', 'read_only', '09:00:00', '17:00:00', '{1,2,3,4,5}', 'Asia/Tokyo', NOW());
 
 -- =============================================================================
 -- Revoked Tokens（無効化トークン）- JWT管理・セキュリティ
 -- =============================================================================
 
 -- 無効化されたJWTトークンのサンプル（開発・テスト用）
-INSERT INTO revoked_tokens (token_id, user_id, revoked_at, reason, revoked_by, created_at) VALUES
+INSERT INTO revoked_tokens (token_jti, user_id, revoked_at, expires_at) VALUES
 -- ログアウト時の無効化
-('token-abc123-def456-ghi789', '880e8400-e29b-41d4-a716-446655440004', NOW() - INTERVAL '1 hour', 'USER_LOGOUT', '880e8400-e29b-41d4-a716-446655440004', NOW()),
+('jti-abc123-def456-ghi789', '880e8400-e29b-41d4-a716-446655440004', NOW() - INTERVAL '1 hour', NOW() + INTERVAL '24 hours'),
 
 -- セキュリティ侵害による無効化
-('token-xyz789-uvw456-rst123', '880e8400-e29b-41d4-a716-446655440005', NOW() - INTERVAL '30 minutes', 'SECURITY_BREACH', '880e8400-e29b-41d4-a716-446655440001', NOW()),
+('jti-xyz789-uvw456-rst123', '880e8400-e29b-41d4-a716-446655440005', NOW() - INTERVAL '30 minutes', NOW() + INTERVAL '24 hours'),
 
 -- 権限変更による無効化
-('token-mno345-pqr678-stu901', '880e8400-e29b-41d4-a716-446655440006', NOW() - INTERVAL '15 minutes', 'ROLE_CHANGE', '880e8400-e29b-41d4-a716-446655440002', NOW()),
+('jti-mno345-pqr678-stu901', '880e8400-e29b-41d4-a716-446655440006', NOW() - INTERVAL '15 minutes', NOW() + INTERVAL '24 hours'),
 
 -- パスワード変更による無効化
-('token-jkl234-mno567-pqr890', '880e8400-e29b-41d4-a716-446655440007', NOW() - INTERVAL '45 minutes', 'PASSWORD_CHANGE', '880e8400-e29b-41d4-a716-446655440007', NOW())
-ON CONFLICT (token_id) DO NOTHING;
+('jti-jkl234-mno567-pqr890', '880e8400-e29b-41d4-a716-446655440007', NOW() - INTERVAL '45 minutes', NOW() + INTERVAL '24 hours');
 
 -- =============================================================================
 -- 追加設定・メタデータ
 -- =============================================================================
 
 -- バージョン情報・実行履歴
-INSERT INTO audit_logs (user_id, action, resource_type, resource_id, result, details, ip_address, user_agent, timestamp, created_at) VALUES
-('880e8400-e29b-41d4-a716-446655440001', 'SEED_DATA_EXECUTED', 'system', 'enterprise_data_v1.0', 'SUCCESS',
- '{"seed_file": "02_enterprise_data.sql", "version": "1.0", "tables_affected": ["user_scopes", "approval_states", "audit_logs", "time_restrictions", "revoked_tokens"]}', 
- '127.0.0.1', 'PostgreSQL/seed-script', NOW(), NOW())
-ON CONFLICT (id) DO NOTHING; 
+INSERT INTO audit_logs (user_id, action, resource_type, resource_id, result, reason, reason_code, ip_address, user_agent, timestamp) VALUES
+('880e8400-e29b-41d4-a716-446655440001', 'SEED_DATA_EXECUTED', 'system', 'enterprise_data_v2.0', 'SUCCESS',
+ 'Enterprise seed data v2.0 executed successfully. Tables: user_scopes, approval_states, audit_logs, time_restrictions, revoked_tokens', 
+ 'SEED_SUCCESS', '127.0.0.1', 'PostgreSQL/seed-script', NOW()); 

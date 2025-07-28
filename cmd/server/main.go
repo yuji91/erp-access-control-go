@@ -219,57 +219,407 @@ func setupBasicRoutes(router *gin.Engine) {
 
 	// ルートエンドポイント
 	router.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "🔐 ERP Access Control API",
-			"status":  "running",
-			"features": []string{
-				"多重ロール管理",
-				"期限付きロール",
-				"階層的権限",
-				"JWT認証",
-			},
-			"endpoints": []string{
-				"GET /health                       - ヘルスチェック",
-				"GET /version                      - バージョン情報",
-				"POST /api/v1/auth/login           - ログイン",
-				"POST /api/v1/auth/refresh         - トークンリフレッシュ",
-				"POST /api/v1/auth/logout          - ログアウト",
-				"GET /api/v1/auth/profile          - プロフィール取得",
-				"POST /api/v1/users                - ユーザー作成",
-				"GET /api/v1/users                 - ユーザー一覧",
-				"GET /api/v1/users/{id}            - ユーザー詳細",
-				"PUT /api/v1/users/{id}            - ユーザー更新",
-				"DELETE /api/v1/users/{id}         - ユーザー削除",
-				"PUT /api/v1/users/{id}/status     - ステータス変更",
-				"PUT /api/v1/users/{id}/password   - パスワード変更",
-				"POST /api/v1/users/roles          - ロール割り当て",
-				"GET /api/v1/users/{id}/roles      - ユーザーロール一覧",
-				"PATCH /api/v1/users/{id}/roles/{role_id} - ロール更新",
-				"DELETE /api/v1/users/{id}/roles/{role_id} - ロール取り消し",
-				"POST /api/v1/departments          - 部署作成",
-				"GET /api/v1/departments           - 部署一覧",
-				"GET /api/v1/departments/hierarchy - 部署階層構造",
-				"GET /api/v1/departments/{id}      - 部署詳細",
-				"PUT /api/v1/departments/{id}      - 部署更新",
-				"DELETE /api/v1/departments/{id}   - 部署削除",
-				"POST /api/v1/roles                - ロール作成",
-				"GET /api/v1/roles                 - ロール一覧",
-				"GET /api/v1/roles/hierarchy       - ロール階層構造",
-				"GET /api/v1/roles/{id}            - ロール詳細",
-				"PUT /api/v1/roles/{id}            - ロール更新",
-				"DELETE /api/v1/roles/{id}         - ロール削除",
-				"PUT /api/v1/roles/{id}/permissions - 権限割り当て",
-				"GET /api/v1/roles/{id}/permissions - ロール権限一覧",
-				"POST /api/v1/permissions          - 権限作成",
-				"GET /api/v1/permissions           - 権限一覧",
-				"GET /api/v1/permissions/matrix    - 権限マトリックス",
-				"GET /api/v1/permissions/modules/{module} - モジュール別権限",
-				"GET /api/v1/permissions/{id}      - 権限詳細",
-				"PUT /api/v1/permissions/{id}      - 権限更新",
-				"DELETE /api/v1/permissions/{id}   - 権限削除",
-				"GET /api/v1/permissions/{id}/roles - 権限を持つロール一覧",
-			},
-		})
+		// HTMLレスポンスで見やすく表示
+		html := `<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔐 ERP Access Control API</title>
+    <style>
+        body {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0;
+            color: #667eea;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .status {
+            background: linear-gradient(90deg, #28a745, #20c997);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 25px;
+            display: inline-block;
+            margin-top: 15px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .feature-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+            box-shadow: 0 8px 25px rgba(240, 147, 251, 0.3);
+            transition: transform 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+        .endpoints-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin-top: 30px;
+            border-left: 5px solid #667eea;
+        }
+        .endpoints-title {
+            color: #667eea;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .endpoint-category {
+            margin-bottom: 25px;
+        }
+        .category-title {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+        .endpoint {
+            background: white;
+            margin: 8px 0;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+        .endpoint:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        .method {
+            font-weight: bold;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            margin-right: 10px;
+        }
+        .get { background: #007bff; }
+        .post { background: #28a745; }
+        .put { background: #ffc107; color: #333; }
+        .patch { background: #6f42c1; }
+        .delete { background: #dc3545; }
+        .path {
+            color: #333;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+        .description {
+            color: #666;
+            font-style: italic;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 ERP Access Control API</h1>
+            <div class="status">✅ システム稼働中</div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <div>🔄 多重ロール管理</div>
+            </div>
+            <div class="feature-card">
+                <div>⏰ 期限付きロール</div>
+            </div>
+            <div class="feature-card">
+                <div>🏗️ 階層的権限</div>
+            </div>
+            <div class="feature-card">
+                <div>🔐 JWT認証</div>
+            </div>
+        </div>
+
+        <div class="endpoints-section">
+            <div class="endpoints-title">📡 利用可能なAPIエンドポイント</div>
+            
+            <div class="endpoint-category">
+                <div class="category-title">🏥 システム管理</div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/health</span>
+                    <span class="description">ヘルスチェック</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/version</span>
+                    <span class="description">バージョン情報</span>
+                </div>
+            </div>
+
+            <div class="endpoint-category">
+                <div class="category-title">🔐 認証・認可</div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/api/v1/auth/login</span>
+                    <span class="description">ログイン</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/api/v1/auth/refresh</span>
+                    <span class="description">トークンリフレッシュ</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/api/v1/auth/logout</span>
+                    <span class="description">ログアウト</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/auth/profile</span>
+                    <span class="description">プロフィール取得</span>
+                </div>
+            </div>
+
+            <div class="endpoint-category">
+                <div class="category-title">👥 ユーザー管理</div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/api/v1/users</span>
+                    <span class="description">ユーザー作成</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/users</span>
+                    <span class="description">ユーザー一覧</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/users/{id}</span>
+                    <span class="description">ユーザー詳細</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="path">/api/v1/users/{id}</span>
+                    <span class="description">ユーザー更新</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <span class="path">/api/v1/users/{id}</span>
+                    <span class="description">ユーザー削除</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="path">/api/v1/users/{id}/status</span>
+                    <span class="description">ステータス変更</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="path">/api/v1/users/{id}/password</span>
+                    <span class="description">パスワード変更</span>
+                </div>
+            </div>
+
+            <div class="endpoint-category">
+                <div class="category-title">🏷️ ユーザーロール管理</div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/api/v1/users/roles</span>
+                    <span class="description">ロール割り当て</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/users/{id}/roles</span>
+                    <span class="description">ユーザーロール一覧</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method patch">PATCH</span>
+                    <span class="path">/api/v1/users/{id}/roles/{role_id}</span>
+                    <span class="description">ロール更新</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <span class="path">/api/v1/users/{id}/roles/{role_id}</span>
+                    <span class="description">ロール取り消し</span>
+                </div>
+            </div>
+
+            <div class="endpoint-category">
+                <div class="category-title">🏢 部署管理</div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/api/v1/departments</span>
+                    <span class="description">部署作成</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/departments</span>
+                    <span class="description">部署一覧</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/departments/hierarchy</span>
+                    <span class="description">部署階層構造</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/departments/{id}</span>
+                    <span class="description">部署詳細</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="path">/api/v1/departments/{id}</span>
+                    <span class="description">部署更新</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <span class="path">/api/v1/departments/{id}</span>
+                    <span class="description">部署削除</span>
+                </div>
+            </div>
+
+            <div class="endpoint-category">
+                <div class="category-title">🎭 ロール管理</div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/api/v1/roles</span>
+                    <span class="description">ロール作成</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/roles</span>
+                    <span class="description">ロール一覧</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/roles/hierarchy</span>
+                    <span class="description">ロール階層構造</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/roles/{id}</span>
+                    <span class="description">ロール詳細</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="path">/api/v1/roles/{id}</span>
+                    <span class="description">ロール更新</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <span class="path">/api/v1/roles/{id}</span>
+                    <span class="description">ロール削除</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="path">/api/v1/roles/{id}/permissions</span>
+                    <span class="description">権限割り当て</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/roles/{id}/permissions</span>
+                    <span class="description">ロール権限一覧</span>
+                </div>
+            </div>
+
+            <div class="endpoint-category">
+                <div class="category-title">🔑 権限管理</div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/api/v1/permissions</span>
+                    <span class="description">権限作成</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/api/v1/permissions/create-if-not-exists</span>
+                    <span class="description">権限作成（存在しない場合のみ）</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/permissions</span>
+                    <span class="description">権限一覧</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/permissions/matrix</span>
+                    <span class="description">権限マトリックス</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/permissions/modules/{module}</span>
+                    <span class="description">モジュール別権限</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/permissions/{id}</span>
+                    <span class="description">権限詳細</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="path">/api/v1/permissions/{id}</span>
+                    <span class="description">権限更新</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <span class="path">/api/v1/permissions/{id}</span>
+                    <span class="description">権限削除</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/api/v1/permissions/{id}/roles</span>
+                    <span class="description">権限を持つロール一覧</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <h3>🚀 ERP Access Control API v0.1.0-dev</h3>
+            <p>📊 総エンドポイント数: <strong>40+</strong> | 🔒 セキュリティ: <strong>JWT認証</strong> | 🎯 品質: <strong>エンタープライズグレード</strong></p>
+            <p>🌐 <a href="/health" style="color: #ffc107;">ヘルスチェック</a> | 📊 <a href="/version" style="color: #ffc107;">バージョン情報</a></p>
+        </div>
+    </div>
+</body>
+</html>`
+
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(http.StatusOK, html)
 	})
 }
 
@@ -364,14 +714,15 @@ func setupPermissionRoutes(group *gin.RouterGroup, permissionService *services.P
 
 	permissions := group.Group("/permissions")
 	{
-		permissions.POST("", middleware.RequirePermissions("permission:create"), permissionHandler.CreatePermission)                    // POST /api/v1/permissions
-		permissions.GET("", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissions)                         // GET /api/v1/permissions
-		permissions.GET("/matrix", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissionMatrix)             // GET /api/v1/permissions/matrix
-		permissions.GET("/modules/:module", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissionsByModule) // GET /api/v1/permissions/modules/:module
-		permissions.GET("/:id", middleware.RequirePermissions("permission:read"), permissionHandler.GetPermission)                      // GET /api/v1/permissions/:id
-		permissions.PUT("/:id", middleware.RequirePermissions("permission:update"), permissionHandler.UpdatePermission)                 // PUT /api/v1/permissions/:id
-		permissions.DELETE("/:id", middleware.RequirePermissions("permission:delete"), permissionHandler.DeletePermission)              // DELETE /api/v1/permissions/:id
-		permissions.GET("/:id/roles", middleware.RequirePermissions("permission:read"), permissionHandler.GetRolesByPermission)         // GET /api/v1/permissions/:id/roles
+		permissions.POST("", middleware.RequirePermissions("permission:create"), permissionHandler.CreatePermission)                                 // POST /api/v1/permissions
+		permissions.POST("/create-if-not-exists", middleware.RequirePermissions("permission:create"), permissionHandler.CreatePermissionIfNotExists) // POST /api/v1/permissions/create-if-not-exists
+		permissions.GET("", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissions)                                      // GET /api/v1/permissions
+		permissions.GET("/matrix", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissionMatrix)                          // GET /api/v1/permissions/matrix
+		permissions.GET("/modules/:module", middleware.RequirePermissions("permission:list"), permissionHandler.GetPermissionsByModule)              // GET /api/v1/permissions/modules/:module
+		permissions.GET("/:id", middleware.RequirePermissions("permission:read"), permissionHandler.GetPermission)                                   // GET /api/v1/permissions/:id
+		permissions.PUT("/:id", middleware.RequirePermissions("permission:update"), permissionHandler.UpdatePermission)                              // PUT /api/v1/permissions/:id
+		permissions.DELETE("/:id", middleware.RequirePermissions("permission:delete"), permissionHandler.DeletePermission)                           // DELETE /api/v1/permissions/:id
+		permissions.GET("/:id/roles", middleware.RequirePermissions("permission:read"), permissionHandler.GetRolesByPermission)                      // GET /api/v1/permissions/:id/roles
 	}
 }
 
