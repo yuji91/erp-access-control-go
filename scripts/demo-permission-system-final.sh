@@ -50,6 +50,10 @@ log_success() {
     ((SUCCESS_COUNT++))
 }
 
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${RESET} $1"
+}
+
 log_demo() {
     echo -e "\n${CYAN}[DEMO]${RESET} $1"
 }
@@ -199,7 +203,7 @@ create_permission_if_not_exists_api() {
     return 1
 }
 
-# レスポンス表示関数（改良版）
+# レスポンス表示関数（エラー判定改良版）
 show_response() {
     local title="$1"
     local response="$2"
@@ -207,7 +211,9 @@ show_response() {
     echo -e "\n${CYAN}━━━ $title ━━━${RESET}"
     if echo "$response" | jq '.' >/dev/null 2>&1; then
         echo "$response" | jq '.'
-        if echo "$response" | grep -q '"code":'; then
+        
+        # 改良されたエラー判定ロジック
+        if is_error_response "$response"; then
             log_error "APIエラーが発生しました: $title"
         else
             log_success "API呼び出し成功: $title"
@@ -217,6 +223,43 @@ show_response() {
         log_error "JSONパースエラー: $title"
     fi
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
+# エラーレスポンス判定関数（改良版）
+is_error_response() {
+    local response="$1"
+    
+    # 1. 成功レスポンスの特徴を確認（優先）
+    if echo "$response" | jq -e '.permissions' >/dev/null 2>&1 || \
+       echo "$response" | jq -e '.users' >/dev/null 2>&1 || \
+       echo "$response" | jq -e '.roles' >/dev/null 2>&1 || \
+       echo "$response" | jq -e '.departments' >/dev/null 2>&1 || \
+       echo "$response" | jq -e '.access_token' >/dev/null 2>&1; then
+        return 1  # 成功レスポンス
+    fi
+    
+    # 2. エラーコードでの判定
+    if echo "$response" | jq -e '.code' >/dev/null 2>&1; then
+        local code_value=$(echo "$response" | jq -r '.code')
+        case "$code_value" in
+            *ERROR*|*FAILED*|*INVALID*|*UNAUTHORIZED*|*FORBIDDEN*)
+                return 0  # エラー
+                ;;
+            SUCCESS|OK|CREATED|UPDATED)
+                return 1  # 成功
+                ;;
+        esac
+    fi
+    
+    # 3. エラーメッセージでの判定
+    if echo "$response" | jq -e '.message' >/dev/null 2>&1; then
+        local message=$(echo "$response" | jq -r '.message')
+        if [[ "$message" =~ [Ee]rror|[Ff]ailed|[Ii]nvalid ]]; then
+            return 0  # エラー
+        fi
+    fi
+    
+    return 1  # デフォルトは成功
 }
 
 # 安全なAPI呼び出し関数（HTTPステータス確認機能付き）
@@ -251,13 +294,10 @@ safe_api_call() {
         return 1
     fi
     
-    # レスポンス構造ベースの補助判定（エラーコードのみ）
-    if echo "$response_body" | jq -e '.code' >/dev/null 2>&1; then
-        local code_value=$(echo "$response_body" | jq -r '.code')
-        if [[ "$code_value" =~ ERROR$ ]]; then
-            log_error "API Error ($code_value): $context"
-            return 1
-        fi
+    # レスポンス構造ベースの補助判定（改良版）
+    if is_error_response "$response_body"; then
+        log_error "API Error: $context"
+        return 1
     fi
     
     echo "$response_body"
@@ -728,6 +768,11 @@ check_demo_prerequisites() {
     local dept_response=$(safe_api_call "GET" "departments" "" "部署一覧取得")
     local dept_count=$(echo "$dept_response" | jq -r '.total // 0' 2>/dev/null)
     
+    # 空文字列チェック
+    if [ -z "$dept_count" ] || [ "$dept_count" = "null" ]; then
+        dept_count=0
+    fi
+    
     if [ "$dept_count" -gt 0 ]; then
         log_success "部署データ: $dept_count 件確認"
         success_count=$((success_count + 1))
@@ -741,6 +786,11 @@ check_demo_prerequisites() {
     local role_response=$(safe_api_call "GET" "roles" "" "ロール一覧取得")
     local role_count=$(echo "$role_response" | jq -r '.total // 0' 2>/dev/null)
     
+    # 空文字列チェック
+    if [ -z "$role_count" ] || [ "$role_count" = "null" ]; then
+        role_count=0
+    fi
+    
     if [ "$role_count" -gt 0 ]; then
         log_success "ロールデータ: $role_count 件確認"
         success_count=$((success_count + 1))
@@ -753,6 +803,11 @@ check_demo_prerequisites() {
     check_count=$((check_count + 1))
     local user_response=$(safe_api_call "GET" "users" "" "ユーザー一覧取得")
     local user_count=$(echo "$user_response" | jq -r '.total // 0' 2>/dev/null)
+    
+    # 空文字列チェック
+    if [ -z "$user_count" ] || [ "$user_count" = "null" ]; then
+        user_count=0
+    fi
     
     if [ "$user_count" -gt 0 ]; then
         log_success "ユーザーデータ: $user_count 件確認"
