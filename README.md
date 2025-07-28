@@ -55,14 +55,16 @@
 
 #### **🎊 デモ実行結果**
 - **最新デモ実行結果**: [docs/issues/done/20250728_make_demo_output.md](docs/issues/done/20250728_make_demo_output.md) **← エラー 0 件**
-#### **📹 デモ動画** **← NEW!**
+#### **📹 デモ動画**
 
-<video width="100%" max-width="800" controls>
-  <source src="./docs/demo/demo_local_host_8080.mov" type="video/quicktime">
-  <p>お使いのブラウザは動画タグをサポートしていません。<a href="./docs/demo/demo_local_host_8080.mov">こちらをクリック</a>して動画を直接ダウンロードしてください。</p>
-</video>
+[![デモ動画](https://img.shields.io/badge/🎬_Demo_Video-localhost:8080_Web_UI-blue?style=for-the-badge&logo=play&logoColor=white)](./docs/demo/demo_local_host_8080.mov)
+> **📥 動画ファイル**: [demo_local_host_8080.mov](./docs/demo/demo_local_host_8080.mov) をクリックしてダウンロード（17MB、QuickTime形式）
 
-> **💡 デモ内容**: 美しいAPI一覧画面の実演 - カテゴリ別エンドポイント表示、HTTPメソッド別カラーリング、レスポンシブデザイン
+**🎯 デモ内容**: localhost:8080 Web UI の実演
+- 📋 **カテゴリ別エンドポイント表示** - システム管理、認証、ユーザー管理など
+- 🎨 **HTTPメソッド別カラーリング** - GET（青）、POST（緑）、PUT（オレンジ）、DELETE（赤）
+- 📱 **レスポンシブデザイン** - モバイル・デスクトップ対応
+- ⚡ **リアルタイム表示** - 30+ RESTful エンドポイント一覧
 
 **🏆 達成結果**: 
   - **成功率**: **100%** (27/27件全成功、0エラー)
