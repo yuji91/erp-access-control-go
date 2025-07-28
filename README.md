@@ -55,7 +55,12 @@
 
 #### **🎊 デモ実行結果**
 - **最新デモ実行結果**: [docs/issues/todo/20250728_demo_output_09.md](docs/issues/todo/20250728_demo_output_09.md) **← エラー 0 件**
-- **📹 デモ動画**: [localhost:8080 Web UI デモ](./docs/demo/demo_local_host_8080.mov) **← NEW!**
+#### **📹 デモ動画** **← NEW!**
+
+<video width="100%" max-width="800" controls>
+  <source src="./docs/demo/demo_local_host_8080.mov" type="video/quicktime">
+  <p>お使いのブラウザは動画タグをサポートしていません。<a href="./docs/demo/demo_local_host_8080.mov">こちらをクリック</a>して動画を直接ダウンロードしてください。</p>
+</video>
 
 > **💡 デモ内容**: 美しいAPI一覧画面の実演 - カテゴリ別エンドポイント表示、HTTPメソッド別カラーリング、レスポンシブデザイン
 
